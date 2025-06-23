@@ -129,6 +129,9 @@
   <ItemGroup>
     <ClCompile Include="arithmetic.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="maze.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

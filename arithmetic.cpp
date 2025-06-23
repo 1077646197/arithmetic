@@ -2,12 +2,37 @@
 //
 
 #include <iostream>
+#include "maze.h"
+int main() {
+    // 初始化随机数种子
+    srand(time(nullptr));
 
-int main()
-{
-    std::cout << "Hello World!\n";
+    // 设置迷宫尺寸
+    int size = 15;
+
+    // 创建并初始化迷宫
+    Maze maze;
+    maze.init(size);
+
+    // 生成唯一通路迷宫
+    divideAndConquerUniquePath(maze, 1, 1, size - 2, size - 2, VERTICAL);
+
+    // 设置起点和终点
+    setStartExitUnique(maze);
+
+    // 放置资源
+    placeResourcesUnique(maze);
+
+    // 打印迷宫
+    std::cout << "唯一通路迷宫（尺寸 " << size << "x" << size << "）：" << std::endl;
+    printMaze(maze);
+
+    // 保存到文件（可选）
+    // saveToJSON(maze, "unique_maze.json");
+    // saveToCSV(maze, "unique_maze.csv");
+
+    return 0;
 }
-
 // 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单
 // 调试程序: F5 或调试 >“开始调试”菜单
 
