@@ -23,5 +23,11 @@
     <ClInclude Include="maze.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="route_planning.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="greed.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
