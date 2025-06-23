@@ -1,12 +1,30 @@
-﻿// arithmetic.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
-//
-
-#include <iostream>
-#include"route_palnning.h"
+﻿#include <iostream>
+#include"route_planning.h"
+#include"maze.h"
+#include"resource_collecting.h"
+#include "puzzle_solving.h"
+#include"boss_bettle.h"
 using namespace std;
 int main()
 {
     std::cout << "Hello World!\n";
+    Maze maze;
+    maze.init(11);  // 初始化11x11的迷宫
+    divideAndConquerUniquePath(maze, 0, 0, maze.size - 1, maze.size - 1, VERTICAL);
+    setStartExitUnique(maze);
+    placeResourcesUnique(maze);
+
+    ResourcePathPlanner planner(maze);
+    if (planner.solve()) {
+        int maxResource = planner.getMaxResourceValue();
+        std::cout << "最大资源收集值: " << maxResource << std::endl;
+
+        std::vector<std::pair<int, int>> path = planner.getOptimalPath();
+        std::cout << "最优路径长度: " << path.size() << " 步" << std::endl;
+    }
+    else {
+        std::cout << "无法找到从起点到终点的有效路径" << std::endl;
+    }
 }
 // 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单
 // 调试程序: F5 或调试 >“开始调试”菜单
