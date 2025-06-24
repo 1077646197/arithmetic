@@ -1,26 +1,64 @@
 ﻿#include <iostream>
+#include <cstring>
 #include"route_planning.h"
 #include"maze.h"
 #include"resource_collecting.h"
 #include "puzzle_solving.h"
 #include"boss_bettle.h"
+
+
 using namespace std;
+
+// 生成固定的7×7迷宫用于测试
+Maze generateFixedMaze() {
+    Maze maze;
+    maze.size = 7;
+    maze.startX = 1;
+    maze.startY = 1;
+    maze.exitX = 5;
+    maze.exitY = 5;
+
+    // 定义固定的迷宫布局，每行明确以'\0'结尾
+    const char* layout[7] = {
+        "#######",
+        "#SG#G##",
+        "## # ##",
+        "#    ##",
+        "# #####",
+        "#G   E#",
+        "#######"
+    };
+
+    // 使用std::string安全复制字符串
+    for (int i = 0; i < 7; ++i) {
+        // 确保每行有足够空间并正确终止
+        snprintf(maze.grid[i], sizeof(maze.grid[i]), "%s", layout[i]);
+    }
+
+    // 输出迷宫进行测试
+    for (int i = 0; i < 7; ++i) {
+        cout << maze.grid[i] << endl;
+    }
+
+    return maze;
+}
+
 int main()
 {
-    std::cout << "Hello World!\n";
-    Maze maze;
-    maze.init(11);  // 初始化11x11的迷宫
-    divideAndConquerUniquePath(maze, 0, 0, maze.size - 1, maze.size - 1, VERTICAL);
-    setStartExitUnique(maze);
-    placeResourcesUnique(maze);
+    Maze maze= generateFixedMaze();
+    //maze.init(7);  // 初始化7x7的迷宫
+    //divideAndConquerUniquePath(maze, 0, 0, maze.size - 1, maze.size - 1, VERTICAL);
+    //setStartExitUnique(maze);
+    //placeResourcesUnique(maze);
 
     ResourcePathPlanner planner(maze);
     if (planner.solve()) {
         int maxResource = planner.getMaxResourceValue();
         std::cout << "最大资源收集值: " << maxResource << std::endl;
-
-        std::vector<std::pair<int, int>> path = planner.getOptimalPath();
+        planner.printDPTable();
+        vector<pair<int, int>> path = planner.getOptimalPath();
         std::cout << "最优路径长度: " << path.size() << " 步" << std::endl;
+        visualizePath(maze, planner.getOptimalPath());
     }
     else {
         std::cout << "无法找到从起点到终点的有效路径" << std::endl;

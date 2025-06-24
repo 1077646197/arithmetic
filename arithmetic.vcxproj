@@ -136,6 +136,9 @@
     <ClInclude Include="resource_collecting.h" />
     <ClInclude Include="route_planning.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\..\Downloads\input说明(1).txt" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

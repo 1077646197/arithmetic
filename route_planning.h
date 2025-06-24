@@ -6,6 +6,8 @@
 #include <algorithm>         // 算法库，提供max等常用算法和容器操作函数
 #include <stdexcept>         // 标准异常库，用于抛出路径不可达等异常
 #include "maze.h"            // 自定义迷宫生成头文件，提供Maze结构体和生成算法
+#include <queue>
+#include <iomanip>           //规律打印
 using namespace std;
 // 资源点结构体，包含坐标和价值
 struct ResourcePoint {
@@ -70,36 +72,68 @@ public:
         int startX = maze.startX, startY = maze.startY;
         int exitX = maze.exitX, exitY = maze.exitY;
 
-        dp[startX][startY] = getResourceValue(startX, startY);
+        // 检查起点有效性
+        if (!isValid(startX, startY)) {
+            throw runtime_error("起点不可通行");
+        }
 
-        // 按行优先遍历迷宫（vector的二维索引访问）
-        for (int i = 0; i < maze.size; i++) {
-            for (int j = 0; j < maze.size; j++) {
-                if (!isValid(i, j) || dp[i][j] == -1e9) continue;
+        // 初始化DP表、前驱表和访问标记
+        dp.assign(maze.size, vector<int>(maze.size, -1e9));
+        prev.assign(maze.size, vector<pair<int, int>>(maze.size, { -1, -1 }));
+        vector<vector<bool>> visited(maze.size, vector<bool>(maze.size, false));
 
-                // 尝试四个方向移动（使用algorithm中的max比较值）
-                int directions[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
-                for (const auto& dir : directions) {
-                    int nx = i + dir[0], ny = j + dir[1];
-                    if (isValid(nx, ny)) {
-                        int newVal = dp[i][j] + getResourceValue(nx, ny);
-                        if (newVal > dp[nx][ny]) {
-                            dp[nx][ny] = newVal;
-                            prev[nx][ny] = { i, j };
+        // 起点初始化
+        dp[startX][startY] =0;
+        visited[startX][startY] = true;
+
+        // 使用队列按层次处理节点
+        queue<pair<int, int>> processQueue;
+        processQueue.push({ startX, startY });
+
+        // 四个移动方向
+        const int directions[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
+
+        while (!processQueue.empty()) {
+            pair<int, int> current = processQueue.front();
+            int x = current.first;
+            int y = current.second;
+            processQueue.pop();
+
+            // 探索四个方向
+            for (const auto& dir : directions) {
+                int nx = x + dir[0];
+                int ny = y + dir[1];
+                if (isValid(nx, ny)) {
+                    // 计算新路径的资源值
+                    int newVal = dp[x][y] + getResourceValue(nx, ny);
+                    // 发现更优路径且新节点未被最优处理时更新
+                    if (newVal > dp[nx][ny] && !visited[nx][ny]) {
+                        dp[nx][ny] = newVal;
+                        prev[nx][ny] = { x, y };
+
+                        // 仅当节点未被访问过时加入队列
+                        if (!visited[nx][ny]) {
+                            visited[nx][ny] = true;
+                            processQueue.push({ nx, ny });
                         }
                     }
                 }
             }
         }
 
-        // 检查终点是否可达（使用逻辑非操作）
+        // 检查终点是否可达
         return dp[exitX][exitY] != -1e9;
     }
 
-    // 获取坐标的资源价值（通过map查找）
-    int getResourceValue(int x, int y) const {
-        auto it = resourceMap.find(makePair(x, y));
-        return it != resourceMap.end() ? it->second : 0;
+    // 获取坐标的资源价值（获取后清空资源）
+    int getResourceValue(int x, int y) {
+        auto it = resourceMap.find({ x, y });
+        if (it != resourceMap.end()) {
+            int value = it->second;  // 获取资源价值
+            resourceMap.erase(it);   // 从资源表中移除
+            return value;
+        }
+        return 0;  // 无资源或已被采集
     }
 
     // 获取最大资源值（若不可达则抛出异常）
@@ -137,4 +171,40 @@ public:
 
         return path;
     }
+
+    // 简化版动态规划表打印函数（固定宽度4字符）
+    void printDPTable() const {
+        cout << "动态规划表（最大资源值）：" << endl;
+        for (int i = 0; i < maze.size; i++) {
+            for (int j = 0; j < maze.size; j++) {
+                if (dp[i][j] == -1e9) {
+                    cout << "*    ";  // 4字符宽度，空格填充
+                }
+                else {
+                    cout << setw(4) << left << dp[i][j] << " ";  // 左对齐，4字符宽度
+                }
+            }
+            cout << endl;
+        }
+    }
 };
+
+// 路径可视化函数
+void visualizePath(const Maze& maze, const std::vector<std::pair<int, int>>& path) {
+    Maze tempMaze = maze;
+    for (size_t i = 0; i < path.size(); i++) {
+        int x = path[i].first;
+        int y = path[i].second;
+        if (i == 0) {
+            tempMaze.grid[x][y] = 'S';  // 起点
+        }
+        else if (i == path.size() - 1) {
+            tempMaze.grid[x][y] = 'E';  // 终点
+        }
+        else {
+            tempMaze.grid[x][y] = '$';  // 路径标记
+        }
+    }
+    cout << "最优资源收集路径：" << endl;
+    printMaze(tempMaze);
+}
