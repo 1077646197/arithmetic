@@ -64,18 +64,29 @@ int main()
         std::cout << "无法找到从起点到终点的有效路径" << std::endl;
     }*/
     // 示例用法
-    std::vector<std::vector<int>> clues = {
-        {1, 0},    // 第1位是偶数
-        {-1, -1}   // 每位都是不重复的素数
+    //std::vector<std::vector<int>> clues = {
+    //    {1, 0},    // 第1位是偶数
+    //    {-1, -1}   // 每位都是不重复的素数
+    //};
+    //int resources = 20;
+    //std::string targetPassword = "237";
+
+    //// 计算目标密码的哈希值
+    //std::string targetHash = SimpleHash::hash(targetPassword);
+
+    //std::cout << "目标哈希值: " << targetHash << std::endl;
+    //guessPassword(clues, resources, targetHash);
+
+    // 示例：BOSS血量100，玩家有3个技能
+    int bossHP = 100;
+    std::vector<std::vector<int>> skills = {
+        {5, 0},  // 普通攻击：伤害5，无冷却
+        {10, 2}, // 大招：伤害10，冷却2回合
+        {15, 3}  // 超级技能：伤害15，冷却3回合
     };
-    int resources = 20;
-    std::string targetPassword = "237";
 
-    // 计算目标密码的哈希值
-    std::string targetHash = SimpleHash::hash(targetPassword);
-
-    std::cout << "目标哈希值: " << targetHash << std::endl;
-    guessPassword(clues, resources, targetHash);
+    std::vector<int> optimalSequence = findOptimalSkillSequence(bossHP, skills);
+    printSkillSequence(optimalSequence, skills);
 
     return 0;
 }
