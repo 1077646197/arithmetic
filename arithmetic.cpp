@@ -9,35 +9,37 @@
 
 using namespace std;
 
-// 生成固定的7×7迷宫用于测试
 Maze generateFixedMaze() {
     Maze maze;
-    maze.size = 7;
+    maze.size = 10;
     maze.startX = 1;
     maze.startY = 1;
-    maze.exitX = 5;
-    maze.exitY = 5;
+    maze.exitX = 8;
+    maze.exitY = 8;
 
-    // 定义固定的迷宫布局，每行明确以'\0'结尾
-    const char* layout[7] = {
-        "#######",
-        "#SG#G##",
-        "## # ##",
-        "#   T##",
-        "# #####",
-        "#G   E#",
-        "#######"
+    // 定义10×10固定迷宫布局（四周为墙，中间设计复杂通路）
+    const char* layout[10] = {
+        "##########",
+        "#S G#  B##",
+        "##  # # ##",
+        "#   # # ##",
+        "# #   # ##",
+        "# # ######",
+        "# #     L#",
+        "# ########",
+        "#G      E#",
+        "##########"
     };
 
-    // 使用std::string安全复制字符串
-    for (int i = 0; i < 7; ++i) {
-        // 确保每行有足够空间并正确终止
+    // 安全复制迷宫布局到maze.grid
+    for (int i = 0; i < 10; ++i) {
         snprintf(maze.grid[i], sizeof(maze.grid[i]), "%s", layout[i]);
     }
 
-    // 输出迷宫进行测试
-    for (int i = 0; i < 7; ++i) {
-        cout << maze.grid[i] << endl;
+    // 输出迷宫布局用于测试
+    std::cout << "10×10固定测试迷宫布局：" << std::endl;
+    for (int i = 0; i < 10; ++i) {
+        std::cout << maze.grid[i] << std::endl;
     }
 
     return maze;
@@ -51,42 +53,38 @@ int main()
     //setStartExitUnique(maze);
     //placeResourcesUnique(maze);
 
-    /*ResourcePathPlanner planner(maze);
+    ResourcePathPlanner planner(maze);
     if (planner.solve()) {
         int maxResource = planner.getMaxResourceValue();
-        std::cout << "最大资源收集值: " << maxResource << std::endl;
         planner.printDPTable();
-        vector<pair<int, int>> path = planner.getOptimalPath();
-        std::cout << "最优路径长度: " << path.size() << " 步" << std::endl;
-        visualizePath(maze, planner.getOptimalPath());
     }
     else {
         std::cout << "无法找到从起点到终点的有效路径" << std::endl;
-    }*/
-    // 示例用法
-    //std::vector<std::vector<int>> clues = {
-    //    {1, 0},    // 第1位是偶数
-    //    {-1, -1}   // 每位都是不重复的素数
-    //};
-    //int resources = 20;
-    //std::string targetPassword = "237";
-
-    //// 计算目标密码的哈希值
-    //std::string targetHash = SimpleHash::hash(targetPassword);
-
-    //std::cout << "目标哈希值: " << targetHash << std::endl;
-    //guessPassword(clues, resources, targetHash);
-
-    // 示例：BOSS血量100，玩家有3个技能
-    int bossHP = 100;
-    std::vector<std::vector<int>> skills = {
-        {5, 0},  // 普通攻击：伤害5，无冷却
-        {10, 2}, // 大招：伤害10，冷却2回合
-        {15, 3}  // 超级技能：伤害15，冷却3回合
+    }
+    /*// 示例用法
+    std::vector<std::vector<int>> clues = {
+        {1, 0},    // 第1位是偶数
+       {-1, -1}   // 每位都是不重复的素数
     };
+    int resources = 20;
+    std::string targetPassword = "237";
 
-    std::vector<int> optimalSequence = findOptimalSkillSequence(bossHP, skills);
-    printSkillSequence(optimalSequence, skills);
+    // 计算目标密码的哈希值
+    std::string targetHash = SimpleHash::hash(targetPassword);
+
+    std::cout << "目标哈希值: " << targetHash << std::endl;
+    guessPassword(clues, resources, targetHash);*/
+
+    //// 示例：BOSS血量100，玩家有3个技能
+    //int bossHP = 100;
+    //std::vector<std::vector<int>> skills = {
+    //    {5, 0},  // 普通攻击：伤害5，无冷却
+    //    {10, 2}, // 大招：伤害10，冷却2回合
+    //    {15, 3}  // 超级技能：伤害15，冷却3回合
+    //};
+
+    //std::vector<int> optimalSequence = findOptimalSkillSequence(bossHP, skills);
+    //printSkillSequence(optimalSequence, skills);
 
     return 0;
 }

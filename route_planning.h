@@ -21,7 +21,6 @@ class ResourcePathPlanner {
 private:
     Maze maze;                            // 迷宫对象，依赖maze.h中定义的结构
     vector<vector<int>> dp;               // 动态规划表，使用vector实现二维数组
-    vector<vector<pair<int, int>>> prev;  // 前驱节点表，存储路径回溯信息
     map<pair<int, int>, int> resourceMap;  // 资源映射表，用map实现坐标到价值的映射
 
     // 将坐标对转换为唯一键
@@ -40,7 +39,6 @@ public:
     // 构造函数，接收迷宫对象并初始化DP表
     ResourcePathPlanner(const Maze& m) : maze(m) {
         dp.resize(maze.size, vector<int>(maze.size, -1e9));     // vector动态调整大小
-        prev.resize(maze.size, vector<pair<int, int>>(maze.size, { -1, -1 }));
         initializeResourceMap();
     }
 
@@ -67,7 +65,7 @@ public:
         }
     }
 
-    // 执行动态规划求解最优路径
+    // 执行动态规划求解资源最大化的最优路径
     bool solve() {
         int startX = maze.startX, startY = maze.startY;
         int exitX = maze.exitX, exitY = maze.exitY;
@@ -77,27 +75,34 @@ public:
             throw runtime_error("起点不可通行");
         }
 
-        // 初始化DP表、前驱表和访问标记
+        // 初始化DP表、前驱表和路径记录
         dp.assign(maze.size, vector<int>(maze.size, -1e9));
-        prev.assign(maze.size, vector<pair<int, int>>(maze.size, { -1, -1 }));
-        vector<vector<bool>> visited(maze.size, vector<bool>(maze.size, false));
+        vector<vector<vector<pair<int, int>>>> path(maze.size, vector<vector<pair<int, int>>>(maze.size));
 
         // 起点初始化
-        dp[startX][startY] =0;
-        visited[startX][startY] = true;
+        dp[startX][startY] = getResourceValue(startX, startY);
+        path[startX][startY].push_back({ startX, startY });
 
-        // 使用队列按层次处理节点
-        queue<pair<int, int>> processQueue;
-        processQueue.push({ startX, startY });
+        // 使用优先队列按资源价值降序处理节点（优先探索资源更多的路径）
+        priority_queue<pair<int, pair<int, int>>> pq;
+        pq.push({ dp[startX][startY], {startX, startY} });
 
         // 四个移动方向
         const int directions[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
 
-        while (!processQueue.empty()) {
-            pair<int, int> current = processQueue.front();
+        while (!pq.empty()) {
+            // 明确变量类型
+            pair<int, pair<int, int>> currentPair = pq.top();
+            pq.pop();
+            int currentVal = currentPair.first;
+            pair<int, int> current = currentPair.second;
             int x = current.first;
             int y = current.second;
-            processQueue.pop();
+
+            // 如果当前节点的资源值小于DP表中的记录，说明已找到更优路径，跳过
+            if (currentVal < dp[x][y]) {
+                continue;
+            }
 
             // 探索四个方向
             for (const auto& dir : directions) {
@@ -105,24 +110,34 @@ public:
                 int ny = y + dir[1];
                 if (isValid(nx, ny)) {
                     // 计算新路径的资源值
-                    int newVal = dp[x][y] + getResourceValue(nx, ny);
-                    // 发现更优路径且新节点未被最优处理时更新
-                    if (newVal > dp[nx][ny] && !visited[nx][ny]) {
+                    int newVal = currentVal + getResourceValue(nx, ny);
+                    // 发现更优路径时更新
+                    if (newVal > dp[nx][ny]) {
                         dp[nx][ny] = newVal;
-                        prev[nx][ny] = { x, y };
-
-                        // 仅当节点未被访问过时加入队列
-                        if (!visited[nx][ny]) {
-                            visited[nx][ny] = true;
-                            processQueue.push({ nx, ny });
-                        }
+                        path[nx][ny] = path[x][y];
+                        path[nx][ny].push_back({ nx, ny });
+                        pq.push({ newVal, {nx, ny} });
                     }
                 }
             }
         }
 
         // 检查终点是否可达
-        return dp[exitX][exitY] != -1e9;
+        if (dp[exitX][exitY] == -1e9) {
+            return false;
+        }
+
+        // 定义finalPath变量并赋值
+        vector<pair<int, int>> finalPath = path[exitX][exitY];
+
+        // 输出资源最大化的路径和总资源值
+        cout << "资源最大化路径（总资源值: " << dp[exitX][exitY] << "）：" << endl;
+        for (size_t i = 0; i < finalPath.size(); i++) {
+            cout << "步骤 " << setw(4) << left<< i << ": (" << finalPath[i].first << ", " << finalPath[i].second << ")  ";
+            if ((i+1) % 6 == 0) cout << endl;
+        }
+
+        return true;
     }
 
     // 获取坐标的资源价值（获取后清空资源）
@@ -145,34 +160,10 @@ public:
         return dp[exitX][exitY];
     }
 
-    // 获取最优路径序列（通过栈回溯路径）
-    vector<pair<int, int>> getOptimalPath() const {
-        int exitX = maze.exitX, exitY = maze.exitY;
-        if (dp[exitX][exitY] == -1e9) {
-            throw runtime_error("没有找到可达的路径");
-        }
-        vector<pair<int, int>> path;
-        stack<pair<int, int>> pathStack; // 使用栈回溯路径
-
-        int x = exitX, y = exitY;
-        while (x != -1 && y != -1) {
-            pathStack.push({ x, y });
-            auto p = prev[x][y];
-            x = p.first;
-            y = p.second;
-        }
-
-        // 反转栈中元素顺序（vector的push_back操作）
-        while (!pathStack.empty()) {
-            path.push_back(pathStack.top());
-            pathStack.pop();
-        }
-
-        return path;
-    }
 
     // 简化版动态规划表打印函数（固定宽度4字符）
     void printDPTable() const {
+        cout << endl;
         cout << "动态规划表（最大资源值）：" << endl;
         for (int i = 0; i < maze.size; i++) {
             for (int j = 0; j < maze.size; j++) {
