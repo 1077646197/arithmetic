@@ -151,7 +151,6 @@ public:
         if (dp[exitX][exitY] == -1e9) {
             throw runtime_error("没有找到可达的路径");
         }
-
         vector<pair<int, int>> path;
         stack<pair<int, int>> pathStack; // 使用栈回溯路径
 

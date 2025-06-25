@@ -23,7 +23,7 @@ Maze generateFixedMaze() {
         "#######",
         "#SG#G##",
         "## # ##",
-        "#    ##",
+        "#   T##",
         "# #####",
         "#G   E#",
         "#######"
@@ -51,7 +51,7 @@ int main()
     //setStartExitUnique(maze);
     //placeResourcesUnique(maze);
 
-    ResourcePathPlanner planner(maze);
+    /*ResourcePathPlanner planner(maze);
     if (planner.solve()) {
         int maxResource = planner.getMaxResourceValue();
         std::cout << "最大资源收集值: " << maxResource << std::endl;
@@ -62,7 +62,22 @@ int main()
     }
     else {
         std::cout << "无法找到从起点到终点的有效路径" << std::endl;
-    }
+    }*/
+    // 示例用法
+    std::vector<std::vector<int>> clues = {
+        {1, 0},    // 第1位是偶数
+        {-1, -1}   // 每位都是不重复的素数
+    };
+    int resources = 20;
+    std::string targetPassword = "237";
+
+    // 计算目标密码的哈希值
+    std::string targetHash = SimpleHash::hash(targetPassword);
+
+    std::cout << "目标哈希值: " << targetHash << std::endl;
+    guessPassword(clues, resources, targetHash);
+
+    return 0;
 }
 // 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单
 // 调试程序: F5 或调试 >“开始调试”菜单
