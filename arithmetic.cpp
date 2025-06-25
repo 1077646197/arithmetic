@@ -18,7 +18,7 @@ Maze generateFixedMaze() {
     maze.exitY = 8;
 
     // 定义10×10固定迷宫布局（四周为墙，中间设计复杂通路）
-    const char* layout[10] = {
+    const char* layout[20] = {
         "##########",
         "#S G#  B##",
         "##  # # ##",
@@ -32,13 +32,13 @@ Maze generateFixedMaze() {
     };
 
     // 安全复制迷宫布局到maze.grid
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < maze.size; ++i) {
         snprintf(maze.grid[i], sizeof(maze.grid[i]), "%s", layout[i]);
     }
 
     // 输出迷宫布局用于测试
-    std::cout << "10×10固定测试迷宫布局：" << std::endl;
-    for (int i = 0; i < 10; ++i) {
+    std::cout << "n×n固定测试迷宫布局：" << std::endl;
+    for (int i = 0; i < maze.size; ++i) {
         std::cout << maze.grid[i] << std::endl;
     }
 
