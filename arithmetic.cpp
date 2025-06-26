@@ -61,19 +61,19 @@ int main()
     else {
         std::cout << "无法找到从起点到终点的有效路径" << std::endl;
     }
-    /*// 示例用法
-    std::vector<std::vector<int>> clues = {
-        {1, 0},    // 第1位是偶数
-       {-1, -1}   // 每位都是不重复的素数
-    };
-    int resources = 20;
-    std::string targetPassword = "237";
 
-    // 计算目标密码的哈希值
-    std::string targetHash = SimpleHash::hash(targetPassword);
+    // 示例：设置目标哈希值（实际使用时应从安全存储中获取）
+    std::string targetHash = "003a44b04e2e9eac5eb7597955068e745d78bb18b17a60d26645beebe111de40";
 
-    std::cout << "目标哈希值: " << targetHash << std::endl;
-    guessPassword(clues, resources, targetHash);*/
+    // 示例线索：每位都是不重复的素数
+    std::vector<std::vector<int>> clues = { {1,1} ,{ 2,0 },{-1,-1,3} };
+
+    // 初始资源数量(替换为玩家资源)
+    int resources = 100;
+
+    // 开始回溯猜测密码
+    guessPassword(clues, resources, targetHash);
+
 
     //// 示例：BOSS血量100，玩家有3个技能
     //int bossHP = 100;
