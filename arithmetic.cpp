@@ -6,7 +6,6 @@
 #include "puzzle_solving.h"
 #include"boss_bettle.h"
 
-
 using namespace std;
 
 Maze generateFixedMaze() {
@@ -20,10 +19,10 @@ Maze generateFixedMaze() {
     // 定义10×10固定迷宫布局（四周为墙，中间设计复杂通路）
     const char* layout[20] = {
         "##########",
-        "#S G#  B##",
-        "##  # # ##",
-        "#   # # ##",
-        "# #   # ##",
+        "#S G#   ##",
+        "### # # ##",
+        "#   #T# ##",
+        "# #   #T##",
         "# # ######",
         "# #     L#",
         "# ########",
@@ -47,6 +46,7 @@ Maze generateFixedMaze() {
 
 int main()
 {
+
     Maze maze= generateFixedMaze();
     //maze.init(7);  // 初始化7x7的迷宫
     //divideAndConquerUniquePath(maze, 0, 0, maze.size - 1, maze.size - 1, VERTICAL);
@@ -54,25 +54,25 @@ int main()
     //placeResourcesUnique(maze);
 
     ResourcePathPlanner planner(maze);
-    if (planner.solve()) {
-        int maxResource = planner.getMaxResourceValue();
+    if (planner.solveWithPruning()) {
+        //int maxResource = planner.getMaxResourceValue();
         planner.printDPTable();
     }
     else {
         std::cout << "无法找到从起点到终点的有效路径" << std::endl;
     }
 
-    // 示例：设置目标哈希值（实际使用时应从安全存储中获取）
-    std::string targetHash = "003a44b04e2e9eac5eb7597955068e745d78bb18b17a60d26645beebe111de40";
+    //// 示例：设置目标哈希值（实际使用时应从安全存储中获取）
+    //std::string targetHash = "003a44b04e2e9eac5eb7597955068e745d78bb18b17a60d26645beebe111de40";
 
-    // 示例线索：每位都是不重复的素数
-    std::vector<std::vector<int>> clues = { {1,1} ,{ 2,0 },{-1,-1,3} };
+    //// 示例线索：每位都是不重复的素数
+    //std::vector<std::vector<int>> clues = { {1,1} ,{ 2,0 },{,1} };
 
-    // 初始资源数量(替换为玩家资源)
-    int resources = 100;
+    //// 初始资源数量(替换为玩家资源)
+    //int resources = 100;
 
-    // 开始回溯猜测密码
-    guessPassword(clues, resources, targetHash);
+    //// 开始回溯猜测密码
+    //guessPassword(clues, resources, targetHash);
 
 
     //// 示例：BOSS血量100，玩家有3个技能
