@@ -136,7 +136,7 @@ public:
             for (const auto& dir : directions) {
                 int nx = x + dir[0];
                 int ny = y + dir[1];
-                if (dp[nx][ny] != -1) {
+                if (dp[nx][ny] != -1&& dp[nx][ny]>0) {
                     // 计算新路径的资源值，使用originalDp获取资源值
                     int newVal = currentVal + getResourceValue(nx, ny);
                     // 发现更优路径时更新
@@ -145,7 +145,6 @@ public:
                         path[nx][ny] = path[x][y];
                         path[nx][ny].push_back({ nx, ny });
                         pq.push({ newVal, {nx, ny} });
-
                     }
                 }
             }
