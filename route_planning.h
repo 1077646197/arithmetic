@@ -93,7 +93,66 @@ public:
             }
         }
     }
+    // 优化路径：删除重复循环段，确保每个点至少被访问一次
+    vector<pair<int, int>> removePathLoops(const vector<pair<int, int>>& originalPath) {
+        vector<pair<int, int>> optimizedPath = originalPath;
+        // 无需引入新容器，通过基础遍历实现逻辑
 
+        for (auto it = optimizedPath.begin(); it != optimizedPath.end(); ) {
+            auto start = it;
+            auto end = optimizedPath.end();
+
+            // 查找与当前点重复的首个后续点（形成循环的终点）
+            for (auto jt = next(it); jt != optimizedPath.end(); ++jt) {
+                if (jt->first == it->first && jt->second == it->second) {
+                    end = jt;
+                    break;
+                }
+            }
+
+            // 若找到循环段（start到end），检查是否可以安全删除
+            if (end != optimizedPath.end()) {
+                // 标记：循环段中的点是否在循环外出现过（确保删除后不丢失）
+                bool canRemove = true;
+
+                // 遍历循环段中的中间点（start+1到end-1）
+                for (auto kt = next(start); kt != end; ++kt) {
+                    const auto& midPoint = *kt;
+                    bool existsOutside = false;
+
+                    // 检查该中间点是否在循环段外出现过
+                    for (auto lt = optimizedPath.begin(); lt != optimizedPath.end(); ++lt) {
+                        // 跳过循环段本身（start到end）
+                        if (lt >= start && lt <= end) {
+                            continue;
+                        }
+                        // 若在循环段外找到该点，说明删除后仍有访问记录
+                        if (*lt == midPoint) {
+                            existsOutside = true;
+                            break;
+                        }
+                    }
+
+                    // 若中间点仅存在于循环段中，删除会导致该点丢失，禁止删除
+                    if (!existsOutside) {
+                        canRemove = false;
+                        break;
+                    }
+                }
+
+                // 安全删除：循环段中所有点在外部均有访问记录
+                if (canRemove) {
+                    it = optimizedPath.erase(next(start), next(end));
+                    continue;
+                }
+            }
+
+            // 不删除时，继续检查下一个点
+            ++it;
+        }
+
+        return optimizedPath;
+    }
     // 执行动态规划求解资源最大化的最优路径
     bool solve() {
         int startX = maze.startX, startY = maze.startY;
@@ -155,9 +214,8 @@ public:
             return false;
         }
 
-        // 定义finalPath变量并赋值
-        vector<pair<int, int>> finalPath = path[exitX][exitY];
-
+        // 定义finalPath变量并赋值优化后的路径
+        vector<pair<int, int>>finalPath = removePathLoops(path[exitX][exitY]);
         // 输出资源最大化的路径
         cout << "资源最大化路径: " << endl;
         for (size_t i = 0; i < finalPath.size(); i++) {
