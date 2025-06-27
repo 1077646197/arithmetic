@@ -9,6 +9,8 @@
 #include <queue>
 #include <iomanip>
 #include <functional>
+#include <thread>
+#include <chrono> 
 using namespace std;
 
 // 资源点结构体，包含坐标和价值
@@ -27,9 +29,8 @@ private:
     map<pair<int, int>, int> resourceMap;  // 资源映射表
     vector<vector<pair<int, int>>> predecessor;  // 用于存储路径前驱节点
     // 新增：剪枝法路径和资源值存储
-    vector<pair<int, int>> prunedPath;     // 剪枝法计算的路径
     int prunedPathResource;                // 剪枝法路径的总资源值
-
+    bool vvisited[20][20] = { 0 };
     // 坐标转键值
     pair<int, int> makePair(int x, int y) const {
         return make_pair(x, y);
@@ -41,16 +42,6 @@ private:
         return (it != resourceMap.end()) ? it->second : 0;
     }
 
-    // 新增：计算路径总资源值（剪枝法用）
-    int calculateTotalResource(const vector<pair<int, int>>& path, const vector<vector<int>>& tempResource) const {
-        int total = 0;
-        for (size_t i = 0; i < path.size(); ++i) {
-            int x = path[i].first;
-            int y = path[i].second;
-            total += tempResource[x][y];
-        }
-        return total;
-    }
 
 public:
     // 构造函数
@@ -64,7 +55,25 @@ public:
         return x >= 0 && x < maze.size && y >= 0 && y < maze.size &&
             maze.grid[x][y] != '#' && maze.grid[x][y] != 'T';
     }
-
+    void initialdp()
+    {
+        for (int i = 0; i < maze.size; ++i) {//初始化dp表
+            for (int j = 0; j < maze.size; ++j) {
+                if (isValid(i, j))
+                {
+                    dp[i][j] = getCurrentResourceValue(i, j);
+                }
+                else if(maze.grid[i][j]=='T')
+                {
+                    dp[i][j] = -3;
+                }
+                else
+                {
+                    dp[i][j] = -1;
+                }
+            }
+        }
+    }
     // 初始化资源映射表（从迷宫矩阵提取资源价值）
     void initializeResourceMap() {
         resourceMap.clear();
@@ -76,14 +85,6 @@ public:
                 else if (cell == 'B') resourceMap[makePair(i, j)] = 20;
                 else if (cell == 'T') resourceMap[makePair(i, j)] = -3;
             }
-        }
-    }
-
-    // 设置自定义资源分布（覆盖默认资源）
-    void setResourceDistribution(const vector<ResourcePoint>& resources) {
-        resourceMap.clear();
-        for (const auto& point : resources) {
-            resourceMap[makePair(point.x, point.y)] = point.value;
         }
     }
 
@@ -133,7 +134,7 @@ public:
             for (const auto& dir : directions) {
                 int nx = x + dir[0];
                 int ny = y + dir[1];
-                if (isValid(nx, ny)) {
+                if (dp[nx][ny]!=-1) {
                     // 计算新路径的资源值，使用originalDp获取资源值
                     int newVal = currentVal + getResourceValue(nx, ny);
                     // 发现更优路径时更新
@@ -142,6 +143,7 @@ public:
                         path[nx][ny] = path[x][y];
                         path[nx][ny].push_back({ nx, ny });
                         pq.push({ newVal, {nx, ny} });
+
                     }
                 }
             }
@@ -155,26 +157,32 @@ public:
         // 定义finalPath变量并赋值
         vector<pair<int, int>> finalPath = path[exitX][exitY];
 
-        // 输出资源最大化的路径和总资源值
-        cout << "资源最大化路径（总资源值: " << resourceDp[exitX][exitY] << "）：" << endl;
+        // 输出资源最大化的路径
+        cout << "资源最大化路径: "<< endl;
         for (size_t i = 0; i < finalPath.size(); i++) {
+            system("cls");
+            cout << "步骤 " << setw(4) << left << i << ": (" << finalPath[i].first << ", " << finalPath[i].second << ")  " << endl;
+            for (int j = 0; j < maze.size; ++j) {
+                for (int k = 0; k < maze.size; ++k) {
+                    if (finalPath[i].first == j && finalPath[i].second == k)
+                    {
+                        maze.grid[j][k] = ' ';
+                        cout << "&";
+                    }
+                    else cout << maze.grid[j][k]; 
+                }
+                cout << endl;
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        for (size_t i = 0; i < finalPath.size(); i++) { 
             cout << "步骤 " << setw(4) << left << i << ": (" << finalPath[i].first << ", " << finalPath[i].second << ")  ";
             if ((i + 1) % 6 == 0) cout << endl;
         }
         return true;
     }
-    // 获取最大资源值（若不可达则抛出异常）
-    int getMaxResourceValue() const {
-        int exitX = maze.exitX, exitY = maze.exitY;
-        if (dp[exitX][exitY] == -1e9) {
-            throw runtime_error("没有找到可达的路径"); // 抛出标准异常
-        }
-        return dp[exitX][exitY];
-    }
 
-
-
-    // 剪枝法路径优化函数（无需参数）
+    // 动态规划路径优化函数（无需参数）
     bool solveWithPruning() {
         int startX = maze.startX;
         int startY = maze.startY;
@@ -190,27 +198,8 @@ public:
         if (!isValid(exitX, exitY)) {
             throw runtime_error("终点不可通行");
         }
-        bool vvisited[20][20] = { 0 };
-        for (int i = 0; i < rows; ++i) {
-            for (int j = 0; j < cols; ++j) {
-                if (isValid(i, j))
-                {
-                    dp[i][j] = getCurrentResourceValue(i, j);
-                }
-                else
-                {
-                    dp[i][j] = -1;
-                }
-
-            }
-        }
-        for (int i = 0; i < rows; ++i) {
-            for (int j = 0; j < cols; ++j) {
-                cout << dp[i][j] << "   ";
-            }
-            cout << endl;
-        }
-
+        initialdp();//初始化dp表
+        
         // 第一阶段：剪枝（移除单邻居节点）
         bool updated = true;
         const int directions[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
@@ -218,7 +207,7 @@ public:
             updated = false;
             for (int i = 0; i < rows; ++i) {
                 for (int j = 0; j < cols; ++j) {
-                    if (!isValid(i, j) || maze.grid[i][j] == 'S' || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
+                    if (dp[i][j]==-1 || maze.grid[i][j] == 'S' || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
                         continue;
                     }
 
@@ -228,7 +217,7 @@ public:
                     for (const auto& dir : directions) {
                         int ni = i + dir[0];
                         int nj = j + dir[1];
-                        if (isValid(ni, nj) && vvisited[ni][nj] != 1) {
+                        if (dp[ni][nj] != -1 && vvisited[ni][nj] == 0) {
                             neighborCount++;
                             nX = ni;
                             nY = nj;
@@ -236,7 +225,6 @@ public:
                     }
                     // 单邻居节点剪枝
                     if (neighborCount == 1 && nX != -1 && nY != -1) {
-                        cout << i << j << endl;
                         vvisited[i][j] = 1;
                         updated = true;
                         if (dp[i][j] > 0) {
@@ -245,25 +233,12 @@ public:
                     }
                 }
             }
-            cout << endl;
-            for (int i = 0; i < rows; ++i) {
-                for (int j = 0; j < cols; ++j) {
-                    cout << setw(4) << left << dp[i][j] << " ";
-                }
-                cout << endl;
-            }
         }
-        for (int i = 0; i < rows; ++i) {
-            for (int j = 0; j < cols; ++j) {
-                cout << vvisited[i][j] << "   ";
-            }
-            cout << endl;
-        }
-        //===================
+        //===============================================================
         int t_num = 0;
         for (int i = 0; i < rows; ++i) {
             for (int j = 0; j < cols; ++j) {
-                if (vvisited[i][j] == 1 && maze.grid[i][j] == 'T')//主路经陷阱清除
+                if (vvisited[i][j] == 0 && maze.grid[i][j] == 'T')//主路经陷阱清除
                 {
                     t_num++;
                     maze.grid[i][j] == ' ';
@@ -274,15 +249,14 @@ public:
                     dp[i][j] += 100;
                 }
             }
-            cout << endl;
         }
-        dp[startX][startY] -=3*t_num;
+        dp[startX][startY] -=3*t_num;//起点加载
         updated = 1;
         while (updated) {
             updated = false;
             for (int i = 0; i < rows; ++i) {
                 for (int j = 0; j < cols; ++j) {
-                    if (!isValid(i, j) || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
+                    if (dp[i][j]==-1 || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
                         continue;
                     }
 
@@ -292,7 +266,7 @@ public:
                     for (const auto& dir : directions) {
                         int ni = i + dir[0];
                         int nj = j + dir[1];
-                        if (isValid(ni, nj) && vvisited[ni][nj] != 1) {
+                        if ((dp[ni][nj]!=-1) && vvisited[ni][nj] != 1) {
                             neighborCount++;
                             nX = ni;
                             nY = nj;
@@ -300,7 +274,6 @@ public:
                     }
                     // 单邻居节点剪枝
                     if (neighborCount == 1 && nX != -1 && nY != -1) {
-                        cout << i << j << endl;
                         vvisited[i][j] = 1;
                         updated = true;
                         if (dp[i][j] > 0) {
@@ -309,50 +282,11 @@ public:
                     }
                 }
             }
-            cout << endl;
-            for (int i = 0; i < rows; ++i) {
-                for (int j = 0; j < cols; ++j) {
-                    cout << setw(4) << left << dp[i][j] << " ";
-                }
-                cout << endl;
-            }
         }
-
-        solve();
-         cout << endl;
-        cout << "动态规划表（最大资源值）：" << endl;
-        for (int i = 0; i < maze.size; i++) {
-            for (int j = 0; j < maze.size; j++)
-            {
-                if (dp[i][j] == -1) 
-                {
-                    cout << "*    ";  // 4字符宽度，空格填充
-                }
-                else if ((vvisited[i][j] == 1) && dp[i][j] > 0 || maze.grid[i][j] == 'S'|| maze.grid[i][j] == 'E')
-                {
-                    cout << setw(4) << left << dp[i][j] - 100 << " ";  // 左对齐，4字符宽度
-                }
-                else
-                {
-                    cout << setw(4) << left << dp[i][j]  << " ";  // 左对齐，4字符宽度
-                }
-            }
-            cout << endl;
-        }
-
+        solve();////规划路径
+        printT();//打印资源表
         return true;
     }
-
-    // 获取剪枝法结果的路径
-    vector<pair<int, int>> getPrunedPath() const {
-        return prunedPath;
-    }
-
-    // 获取剪枝法结果的资源值
-    int getPrunedPathResource() const {
-        return prunedPathResource;
-    }
-
     // 获取坐标的资源价值（获取后清空资源）
     int getResourceValue(int x, int y) {
         auto it = resourceMap.find({ x, y });
@@ -363,52 +297,75 @@ public:
         }
         return 0;
     }
-
-    // 获取最优路径
-    vector<pair<int, int>> getOptimalPath() const {
-        vector<pair<int, int>> path;
-        int x = maze.exitX;
-        int y = maze.exitY;
-
-        // 如果终点不可达，返回空路径
-        if (dp[x][y] == -1e9) {
-            return path;
+    void printT()
+    {
+        cout << endl;
+        cout << "动态规划表（最大资源值）：" <<dp[maze.exitX][maze.exitY]-100<< endl;
+        for (int i = 0; i < maze.size; i++) {
+            for (int j = 0; j < maze.size; j++)
+            {
+                if ((dp[i][j] == -1)&&maze.grid[i][j] == '#')
+                {
+                    cout  << setw(4) << '#'<<" ";  // 4字符宽度，空格填充
+                }
+                else if ((dp[i][j] == -1) && maze.grid[i][j] == 'T')
+                {
+                    cout << setw(4) << "-3" << " ";  // 4字符宽度，空格填充
+                }
+                else if ((vvisited[i][j] == 1) && dp[i][j] > 0 || maze.grid[i][j] == 'S' || maze.grid[i][j] == 'E')
+                {
+                    cout << setw(4) << left << dp[maze.exitX][maze.exitY] - 100 << " ";  // 左对齐，4字符宽度
+                }
+                else 
+                {
+                    cout << setw(4) << left << dp[i][j] << " ";  // 左对齐，4字符宽度
+                }
+            }
+            cout << endl;
         }
-
-        // 从终点回溯到起点
-        while (x != -1 && y != -1) {
-            path.push_back({ x, y });
-            auto prevNode = predecessor[x][y];
-            x = prevNode.first;
-            y = prevNode.second;
-        }
-
-        // 反转路径使其从起点到终点
-        reverse(path.begin(), path.end());
-        return path;
     }
-    // 简化版动态规划表打印函数（固定宽度4字符）
-    void printDPTable() const {
-       
+    // 迷宫打印函数：每秒刷新一次，显示玩家当前位置
+    void printMazeWithPlayer(const std::vector<std::string>& originalMaze,
+        const std::vector<std::pair<int, int>>& path) {
+        // 保存迷宫原始字符（用于恢复玩家走过的位置）
+        std::vector<std::string> maze = originalMaze;
+        int n = maze.size();
+
+        // 遍历路径中的每个位置
+        for (size_t step = 0; step < path.size(); ++step) {
+            // 获取当前玩家位置
+            int x = path[step].first;
+            int y = path[step].second;
+
+            // 保存当前位置的原始字符
+            char originalChar = maze[x][y];
+
+            // 标记玩家位置
+            maze[x][y] = '@';
+
+            // 清空控制台（跨平台处理）
+#ifdef _WIN32
+            system("cls");
+#else
+            system("clear");
+#endif
+
+            // 打印当前步骤信息
+            std::cout << "当前步骤: " << step << "/" << path.size() - 1 << std::endl;
+            std::cout << "玩家位置: (" << x << ", " << y << ")" << std::endl << std::endl;
+
+            // 打印迷宫
+            for (int i = 0; i < n; ++i) {
+                std::cout << maze[i] << std::endl;
+            }
+
+            // 恢复原始字符（避免影响下次打印）
+            maze[x][y] = originalChar;
+
+            // 等待1秒（最后一步不需要等待）
+            if (step != path.size() - 1) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+        }
     }
 };
-
-// 路径可视化函数
-void visualizePath(const Maze& maze, const std::vector<std::pair<int, int>>& path) {
-    Maze tempMaze = maze;
-    for (size_t i = 0; i < path.size(); i++) {
-        int x = path[i].first;
-        int y = path[i].second;
-        if (i == 0) {
-            tempMaze.grid[x][y] = 'S';  // 起点
-        }
-        else if (i == path.size() - 1) {
-            tempMaze.grid[x][y] = 'E';  // 终点
-        }
-        else {
-            tempMaze.grid[x][y] = '$';  // 路径标记
-        }
-    }
-    cout << "最优资源收集路径：" << endl;
-    printMaze(tempMaze);  // 假设maze.h中存在printMaze函数
-}

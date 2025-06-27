@@ -11,22 +11,22 @@ using namespace std;
 Maze generateFixedMaze() {
     Maze maze;
     maze.size = 10;
-    maze.startX = 1;
-    maze.startY = 1;
+    maze.startX = 6;
+    maze.startY = 3;
     maze.exitX = 8;
     maze.exitY = 8;
 
     // 定义10×10固定迷宫布局（四周为墙，中间设计复杂通路）
     const char* layout[20] = {
         "##########",
-        "#S G#   ##",
-        "### # # ##",
-        "#   #T# ##",
+        "#  G#   ##",
+        "### #B# ##",
+        "#   # # ##",
         "# #   #T##",
         "# # ######",
-        "# #     L#",
+        "# #S T  L#",
         "# ########",
-        "#G      E#",
+        "#G  T   E#",
         "##########"
     };
 
@@ -56,7 +56,6 @@ int main()
     ResourcePathPlanner planner(maze);
     if (planner.solveWithPruning()) {
         //int maxResource = planner.getMaxResourceValue();
-        planner.printDPTable();
     }
     else {
         std::cout << "无法找到从起点到终点的有效路径" << std::endl;
