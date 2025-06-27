@@ -11,6 +11,12 @@
 #include <functional>
 #include <thread>
 #include <chrono> 
+// ANSI 颜色控制码宏定义
+#define ANSI_COLOR_GREEN "\033[32m"   // 绿色文本
+#define ANSI_COLOR_BLUE "\033[34m"   // 蓝色文本
+#define ANSI_COLOR_RED "\033[31m"   // 红色文本
+#define ANSI_COLOR_YELLOW "\033[33m"   // 黄色文本
+#define ANSI_COLOR_RESET "\033[0m"    // 重置为默认颜色
 using namespace std;
 
 // 资源点结构体，包含坐标和价值
@@ -167,7 +173,19 @@ public:
                     if (finalPath[i].first == j && finalPath[i].second == k)
                     {
                         maze.grid[j][k] = ' ';
-                        cout << "&";
+                        std::cout << ANSI_COLOR_GREEN << "&" << ANSI_COLOR_RESET;
+                    }
+                    else if (maze.grid[j][k]=='#')
+                    {
+                        std::cout << ANSI_COLOR_BLUE << maze.grid[j][k] << ANSI_COLOR_RESET;
+                    }
+                    else if (maze.grid[j][k] == 'T')
+                    {
+                        std::cout << ANSI_COLOR_RED << maze.grid[j][k] << ANSI_COLOR_RESET;
+                    }
+                    else if (maze.grid[j][k] == 'G')
+                    {
+                        std::cout << ANSI_COLOR_YELLOW << maze.grid[j][k] << ANSI_COLOR_RESET;
                     }
                     else cout << maze.grid[j][k]; 
                 }
@@ -284,7 +302,7 @@ public:
             }
         }
         solve();////规划路径
-        printT();//打印资源表
+        //printT();//打印资源表
         return true;
     }
     // 获取坐标的资源价值（获取后清空资源）
@@ -322,50 +340,6 @@ public:
                 }
             }
             cout << endl;
-        }
-    }
-    // 迷宫打印函数：每秒刷新一次，显示玩家当前位置
-    void printMazeWithPlayer(const std::vector<std::string>& originalMaze,
-        const std::vector<std::pair<int, int>>& path) {
-        // 保存迷宫原始字符（用于恢复玩家走过的位置）
-        std::vector<std::string> maze = originalMaze;
-        int n = maze.size();
-
-        // 遍历路径中的每个位置
-        for (size_t step = 0; step < path.size(); ++step) {
-            // 获取当前玩家位置
-            int x = path[step].first;
-            int y = path[step].second;
-
-            // 保存当前位置的原始字符
-            char originalChar = maze[x][y];
-
-            // 标记玩家位置
-            maze[x][y] = '@';
-
-            // 清空控制台（跨平台处理）
-#ifdef _WIN32
-            system("cls");
-#else
-            system("clear");
-#endif
-
-            // 打印当前步骤信息
-            std::cout << "当前步骤: " << step << "/" << path.size() - 1 << std::endl;
-            std::cout << "玩家位置: (" << x << ", " << y << ")" << std::endl << std::endl;
-
-            // 打印迷宫
-            for (int i = 0; i < n; ++i) {
-                std::cout << maze[i] << std::endl;
-            }
-
-            // 恢复原始字符（避免影响下次打印）
-            maze[x][y] = originalChar;
-
-            // 等待1秒（最后一步不需要等待）
-            if (step != path.size() - 1) {
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-            }
         }
     }
 };
