@@ -93,6 +93,48 @@ public:
             }
         }
     }
+    // 辅助函数：使用BFS从起点出发，标记所有可达节点
+    vector<vector<bool>> findReachableFromStart() {
+        int startX = maze.startX;
+        int startY = maze.startY;
+        // 初始化可达性标记数组
+        vector<vector<bool>> reachable(maze.size, vector<bool>(maze.size, false));
+
+        // 起点本身不可达则直接返回空标记
+        if (!isValid(startX, startY)) {
+            return reachable;
+        }
+
+        // BFS队列初始化
+        queue<pair<int, int>> q;
+        q.push({ startX, startY });
+        reachable[startX][startY] = true;  // 标记起点可达
+
+        // 方向数组（上下左右）
+        const int dirs[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
+
+        // BFS遍历所有可达节点
+        while (!q.empty()) {
+            auto current = q.front();
+            q.pop();
+            int x = current.first;
+            int y = current.second;
+
+            // 探索四个方向
+            for (const auto& dir : dirs) {
+                int nx = x + dir[0];
+                int ny = y + dir[1];
+
+                // 检查：节点有效 + 未被标记 + 原始DP值>0（可通行）
+                if (isValid(nx, ny) && !reachable[nx][ny] && dp[nx][ny] > 0) {
+                    reachable[nx][ny] = true;  // 标记为可达
+                    q.push({ nx, ny });          // 加入队列继续探索
+                }
+            }
+        }
+
+        return reachable;
+    }
     // 修正后的核心函数：从起点遍历所有相同DP值节点到终点（兼容C++11）
     bool traverseAllSameDp() {
         int startX = maze.startX;
@@ -245,7 +287,7 @@ public:
         int exitY = maze.exitY;
         int rows = maze.size;
         int cols = maze.size;
-        
+        dp[startX][startY] += 100;
         // 检查起点终点有效性
         if (!isValid(startX, startY)) {
             throw runtime_error("起点不可通行");
@@ -261,7 +303,7 @@ public:
             updated = false;
             for (int i = 0; i < rows; ++i) {
                 for (int j = 0; j < cols; ++j) {
-                    if (!isValid(i, j) || maze.grid[i][j] == 'S' || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
+                    if (!isValid(i, j) || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
                         continue;
                     }
 
@@ -290,52 +332,17 @@ public:
         }
         //===============================================================
         int t_num = 0;
-        for (int i = 0; i < rows; ++i) {
-            for (int j = 0; j < cols; ++j) {
-                if (dp[i][j] == -3 && !vvisited[i][j])//主路经陷阱清除
-                {
-                    t_num++;
-                    dp[i][j] = 0;
-                }
-            }
-        }
-        dp[startX][startY] += 100;
-        dp[startX][startY] -= 3 * t_num;//起点加载
         updated = 1;
-        while (updated) {
-            updated = false;
-            for (int i = 0; i < rows; ++i) {
-                for (int j = 0; j < cols; ++j) {
-                    if (!isValid(i, j) || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
-                        continue;
-                    }
-
-                    // 统计可用邻居
-                    int neighborCount = 0;
-                    int nX = -1, nY = -1;
-                    for (const auto& dir : directions) {
-                        int ni = i + dir[0];
-                        int nj = j + dir[1];
-                        if (isValid(ni, nj) && vvisited[ni][nj] != 1) {
-                            neighborCount++;
-                            nX = ni;
-                            nY = nj;
-                        }
-                    }
-                    // 单邻居节点剪枝
-                    if (neighborCount == 1 && nX != -1 && nY != -1) {
-                        vvisited[i][j] = 1;
-                        updated = true;
-                        if (dp[i][j] > 0) {
-                            dp[nX][nY] += dp[i][j];
-                        }
-                    }
-                }
-            }
-        }
         for (int i = 0; i < rows; ++i) {
             for (int j = 0; j < cols; ++j) {
-                if (isValid(i, j)&&dp[i][j]>0) {
+                cout << setw(4) << dp[i][j];
+            }
+            cout << endl;
+        }
+        vector<vector<bool>> startReachable = findReachableFromStart();
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                if (startReachable[i][j] == 1) {
                     dp[i][j] = dp[exitX][exitY];
                 }
             }
@@ -365,7 +372,7 @@ public:
     void printT()
     {
         cout << endl;
-        cout << "动态规划表（最大资源值）：" << dp[maze.exitX][maze.exitY] - 100 << endl;
+        cout << "动态规划表（最大资源值）：" << dp[maze.exitX][maze.exitY] << endl;
         for (int i = 0; i < maze.size; i++) {
             for (int j = 0; j < maze.size; j++)
             {
@@ -379,7 +386,7 @@ public:
                 }
                 else if ((vvisited[i][j] == 1) && dp[i][j] > 0 || maze.grid[i][j] == 'S' || maze.grid[i][j] == 'E')
                 {
-                    cout << setw(4) << left << dp[maze.exitX][maze.exitY] - 100 << " ";  // 左对齐，4字符宽度
+                    cout << setw(4) << left << dp[maze.exitX][maze.exitY] << " ";  // 左对齐，4字符宽度
                 }
                 else
                 {
