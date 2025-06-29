@@ -1,399 +1,303 @@
-#pragma once
-#include <iostream>
-#include <vector>
-#include <map>
-#include <stack>
+#include "path_planning.h"
 #include <algorithm>
-#include <stdexcept>
-#include "maze.h"
+#include <climits>
 #include <queue>
-#include <iomanip>
-#include <functional>
-#include <thread>
-#include <chrono> 
-// ANSI 颜色控制码宏定义
-#define ANSI_COLOR_GREEN "\033[32m"   // 绿色文本
-#define ANSI_COLOR_BLUE "\033[34m"   // 蓝色文本
-#define ANSI_COLOR_RED "\033[31m"   // 红色文本
-#define ANSI_COLOR_YELLOW "\033[33m"   // 黄色文本
-#define ANSI_COLOR_RESET "\033[0m"    // 重置为默认颜色
-using namespace std;
 
-// 资源点结构体，包含坐标和价值
-struct ResourcePoint {
-    int x, y;     // 坐标
-    int value;    // 资源价值（陷阱为负值）
-    ResourcePoint(int _x, int _y, int _value) : x(_x), y(_y), value(_value) {}
-};
-
-
-// 路径规划器类
-class ResourcePathPlanner {
-private:
-    Maze maze;                            // 迷宫对象
-    vector<vector<int>> dp;               // 动态规划表
-    map<pair<int, int>, int> resourceMap;  // 资源映射表
-    vector<vector<pair<int, int>>> predecessor;  // 用于存储路径前驱节点
-    // 新增：剪枝法路径和资源值存储
-    int prunedPathResource;                // 剪枝法路径的总资源值
-    bool vvisited[20][20] = { 0 };
-    // 坐标转键值
-    pair<int, int> makePair(int x, int y) const {
-        return make_pair(x, y);
-    }
-
-    // 新增：获取当前资源值（不清除资源，用于剪枝）
-    int getCurrentResourceValue(int x, int y) const {
-        auto it = resourceMap.find(makePair(x, y));
-        return (it != resourceMap.end()) ? it->second : 0;
-    }
-
-
-public:
-    // 构造函数
-    ResourcePathPlanner(const Maze& m) : maze(m), prunedPathResource(0) {
-        dp.resize(maze.size, vector<int>(maze.size, -1e9));
-        initializeResourceMap();
-    }
-
-    // 检查坐标是否有效（非墙、非陷阱、在迷宫范围内）
-    bool isValid(int x, int y) const {
-        return x >= 0 && x < maze.size && y >= 0 && y < maze.size &&
-            maze.grid[x][y] != '#';
-    }
-    void initialdp()
-    {
-        for (int i = 0; i < maze.size; ++i) {//初始化dp表
-            for (int j = 0; j < maze.size; ++j) {
-                if (isValid(i, j))
-                {
-                    dp[i][j] = getCurrentResourceValue(i, j);
-                }
-                else if (maze.grid[i][j] == 'T')
-                {
-                    dp[i][j] = -3;
-                }
-                else
-                {
-                    dp[i][j] = -1;
-                }
+// 从迷宫中找出起点、终点、金币和陷阱的位置（保持不变）
+void path_planning::findStartExitAndFeatures() {
+    int gold_idx = 0;
+    int trap_idx = 0;
+    for (int i = 0; i < size; ++i) {
+        for (int j = 0; j < size; ++j) {
+            if (maze[i][j] == 'S') startPos = { j, i };
+            else if (maze[i][j] == 'E') exitPos = { j, i };
+            else if (maze[i][j] == 'G') {
+                gold_locations.push_back({ j, i });
+                gold_map[{j, i}] = gold_idx++;
+            }
+            else if (maze[i][j] == 'T') {
+                trap_locations.push_back({ j, i });
+                trap_map[{j, i}] = trap_idx++;
             }
         }
     }
-    // 初始化资源映射表（从迷宫矩阵提取资源价值）
-    void initializeResourceMap() {
-        resourceMap.clear();
-        for (int i = 0; i < maze.size; i++) {
-            for (int j = 0; j < maze.size; j++) {
-                char cell = maze.grid[i][j];
-                if (cell == 'G') resourceMap[makePair(i, j)] = 5;
-                else if (cell == 'L') resourceMap[makePair(i, j)] = 10;
-                else if (cell == 'B') resourceMap[makePair(i, j)] = 20;
-                else if (cell == 'T') resourceMap[makePair(i, j)] = -3;
+}
+
+// 从CSV文件读取迷宫地图（保持不变）
+bool path_planning::readMazeFromCSV(const string& filename) {
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cerr << "无法打开文件: " << filename << endl;
+        return false;
+    }
+
+    string line;
+    maze.clear();
+
+    while (getline(file, line)) {
+        vector<char> row;
+        stringstream ss(line);
+        string cell;
+
+        while (getline(ss, cell, ',')) {
+            if (!cell.empty()) {
+                row.push_back(cell[0]);
             }
+        }
+
+        if (!row.empty()) {
+            maze.push_back(row);
         }
     }
-    // 辅助函数：使用BFS从起点出发，标记所有可达节点
-    vector<vector<bool>> findReachableFromStart() {
-        int startX = maze.startX;
-        int startY = maze.startY;
-        // 初始化可达性标记数组
-        vector<vector<bool>> reachable(maze.size, vector<bool>(maze.size, false));
 
-        // 起点本身不可达则直接返回空标记
-        if (!isValid(startX, startY)) {
-            return reachable;
-        }
+    file.close();
 
-        // BFS队列初始化
-        queue<pair<int, int>> q;
-        q.push({ startX, startY });
-        reachable[startX][startY] = true;  // 标记起点可达
-
-        // 方向数组（上下左右）
-        const int dirs[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
-
-        // BFS遍历所有可达节点
-        while (!q.empty()) {
-            auto current = q.front();
-            q.pop();
-            int x = current.first;
-            int y = current.second;
-
-            // 探索四个方向
-            for (const auto& dir : dirs) {
-                int nx = x + dir[0];
-                int ny = y + dir[1];
-
-                // 检查：节点有效 + 未被标记 + 原始DP值>0（可通行）
-                if (isValid(nx, ny) && !reachable[nx][ny] && dp[nx][ny] > 0) {
-                    reachable[nx][ny] = true;  // 标记为可达
-                    q.push({ nx, ny });          // 加入队列继续探索
-                }
-            }
-        }
-
-        return reachable;
+    if (maze.empty() || maze[0].empty()) {
+        cerr << "迷宫不能为空。" << endl;
+        return false;
     }
-    // 修正后的核心函数：从起点遍历所有相同DP值节点到终点（兼容C++11）
-    bool traverseAllSameDp() {
-        int startX = maze.startX;
-        int startY = maze.startY;
-        int exitX = maze.exitX;
-        int exitY = maze.exitY;
-        int targetVal = dp[startX][startY];
 
-        // 检查起点终点有效性
-        if (!isValid(startX, startY) || !isValid(exitX, exitY)) {
-            throw runtime_error("起点或终点不可通行");
-        }
-        if (dp[exitX][exitY] != targetVal) {
-            cerr << "终点DP值与起点不符（" << dp[exitX][exitY] << " vs " << targetVal << "）" << endl;
-            return false;
-        }
+    size = maze.size();
+    return true;
+}
 
-        // 收集所有目标节点（DP值与起点相同）
-        vector<pair<int, int>> targetNodes;
-        for (int i = 0; i < maze.size; ++i) {
-            for (int j = 0; j < maze.size; ++j) {
-                if (isValid(i, j) && dp[i][j] == targetVal) {
-                    targetNodes.push_back(make_pair(i, j));
-                }
-            }
-        }
-        int totalTargets = targetNodes.size();
-        if (totalTargets == 0) {
-            cerr << "无符合条件的目标节点" << endl;
-            return false;
-        }
+// 默认构造函数（保持不变）
+path_planning::path_planning() : size(0), maxScore(numeric_limits<int>::min()),
+minDistanceForMaxScore(numeric_limits<int>::max()) {}
 
-        // 记录每个目标节点的索引（用于标记访问状态）
-        map<pair<int, int>, int> nodeIndex;
-        for (int i = 0; i < totalTargets; ++i) {
-            nodeIndex[targetNodes[i]] = i;
-        }
-
-        // BFS队列：存储（x, y, 已访问掩码, 路径）
-        queue<tuple<int, int, unsigned long long, vector<pair<int, int>>>> q;
-        // 起点初始化
-        unsigned long long startMask = 1ULL << nodeIndex[make_pair(startX, startY)];
-        vector<pair<int, int>> startPath;
-        startPath.push_back(make_pair(startX, startY));
-        q.push(make_tuple(startX, startY, startMask, startPath));
-
-        // 已访问状态记录（避免重复搜索）
-        map<pair<pair<int, int>, unsigned long long>, bool> visited;
-        visited[make_pair(make_pair(startX, startY), startMask)] = true;
-
-        // 方向数组
-        const int dirs[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
-        vector<pair<int, int>> finalPath;
-        bool found = false;
-
-        while (!q.empty()) {
-            // 用C++11兼容方式获取队列元素（替代结构化绑定）
-            auto front = q.front();
-            q.pop();
-            int x = get<0>(front);
-            int y = get<1>(front);
-            unsigned long long mask = get<2>(front);
-            vector<pair<int, int>> path = get<3>(front);
-
-            // 检查是否到达终点且访问所有节点
-            if (x == exitX && y == exitY && mask == (1ULL << totalTargets) - 1) {
-                finalPath = path;
-                found = true;
-                break;
-            }
-
-            // 探索四个方向
-            for (const auto& dir : dirs) {
-                int nx = x + dir[0];
-                int ny = y + dir[1];
-                // 仅允许访问相同DP值的节点
-                if (!isValid(nx, ny) || dp[nx][ny] != targetVal) {
-                    continue;
-                }
-                // 检查是否为目标节点
-                auto nodeKey = make_pair(nx, ny);
-                if (nodeIndex.find(nodeKey) == nodeIndex.end()) {
-                    continue; // 不在目标节点列表中（理论上不会发生）
-                }
-                int idx = nodeIndex[nodeKey];
-                unsigned long long newMask = mask | (1ULL << idx);
-
-                // 检查是否已访问该状态
-                auto stateKey = make_pair(make_pair(nx, ny), newMask);
-                if (visited.find(stateKey) != visited.end()) {
-                    continue;
-                }
-
-                // 生成新路径
-                vector<pair<int, int>> newPath = path;
-                newPath.push_back(nodeKey);
-                // 入队
-                q.push(make_tuple(nx, ny, newMask, newPath));
-                visited[stateKey] = true;
-            }
-        }
-
-        if (found) {
-            // 输出路径
-            for (size_t i = 0; i < finalPath.size(); i++) {
-                system("cls");
-                cout << "步骤 " << setw(4) << left << i << ": ("
-                    << finalPath[i].first << ", " << finalPath[i].second << ")  " << endl;
-                // 绘制迷宫
-                for (int j = 0; j < maze.size; ++j) {
-                    for (int k = 0; k < maze.size; ++k) {
-                        // 当前路径位置
-                        if (finalPath[i].first == j && finalPath[i].second == k) {
-                            cout << ANSI_COLOR_GREEN << "&" << ANSI_COLOR_RESET;
-                            maze.grid[j][k] = ' ';
-                        }
-                        // 墙壁
-                        else if (maze.grid[j][k] == '#') {
-                            cout << ANSI_COLOR_BLUE << maze.grid[j][k] << ANSI_COLOR_RESET;
-                        }
-                        // 陷阱
-                        else if (maze.grid[j][k] == 'T') {
-                            cout << ANSI_COLOR_RED << maze.grid[j][k] << ANSI_COLOR_RESET;
-                        }
-                        // 资源点
-                        else if (maze.grid[j][k] == 'G' || maze.grid[j][k] == 'L' || maze.grid[j][k] == 'B') {
-                            // 已访问的资源点显示为小写
-                            cout << ANSI_COLOR_YELLOW << maze.grid[j][k] << ANSI_COLOR_RESET;
-                        }
-                        else {
-                            cout << maze.grid[j][k];
-                        }
-                    }
-                    cout << endl;
-                }
-                this_thread::sleep_for(chrono::milliseconds(300)); // 适当减慢速度
-            }
-            return true;
-        }
-        else {
-            cerr << "\n未找到有效路径（无法访问所有节点或终点不可达）" << endl;
-            return false;
-        }
+// 从CSV文件加载迷宫的构造函数（保持不变）
+path_planning::path_planning(const string& filename) : maxScore(numeric_limits<int>::min()),
+minDistanceForMaxScore(numeric_limits<int>::max()) {
+    if (!readMazeFromCSV(filename)) {
+        throw invalid_argument("无法从CSV文件加载迷宫。");
     }
-    // 动态规划路径优化函数（无需参数）
-    bool solveWithPruning() {
-        int startX = maze.startX;
-        int startY = maze.startY;
-        int exitX = maze.exitX;
-        int exitY = maze.exitY;
-        int rows = maze.size;
-        int cols = maze.size;
-        dp[startX][startY] += 100;
-        // 检查起点终点有效性
-        if (!isValid(startX, startY)) {
-            throw runtime_error("起点不可通行");
-        }
-        if (!isValid(exitX, exitY)) {
-            throw runtime_error("终点不可通行");
-        }
-        initialdp();//初始化dp表
-        // 第一阶段：剪枝（移除单邻居节点）
-        bool updated = true;
-        const int directions[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
-        while (updated) {
-            updated = false;
-            for (int i = 0; i < rows; ++i) {
-                for (int j = 0; j < cols; ++j) {
-                    if (!isValid(i, j) || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
-                        continue;
-                    }
+    findStartExitAndFeatures();
+}
 
-                    // 统计可用邻居
-                    int neighborCount = 0;
-                    int nX = -1, nY = -1;
-                    for (const auto& dir : directions) {
-                        int ni = i + dir[0];
-                        int nj = j + dir[1];
-                        if (isValid(ni, nj) && vvisited[ni][nj] == 0) {
-                            neighborCount++;
-                            nX = ni;
-                            nY = nj;
-                        }
-                    }
-                    // 单邻居节点剪枝
-                    if (neighborCount == 1 && nX != -1 && nY != -1) {
-                        vvisited[i][j] = 1;
-                        updated = true;
-                        if (dp[i][j] > 0) {
-                            dp[nX][nY] += dp[i][j];
-                        }
-                    }
-                }
-            }
-        }
-        //===============================================================
-        int t_num = 0;
-        updated = 1;
-        for (int i = 0; i < rows; ++i) {
-            for (int j = 0; j < cols; ++j) {
-                cout << setw(4) << dp[i][j];
-            }
-            cout << endl;
-        }
-        vector<vector<bool>> startReachable = findReachableFromStart();
-        for (int i = 0; i < rows; ++i) {
-            for (int j = 0; j < cols; ++j) {
-                if (startReachable[i][j] == 1) {
-                    dp[i][j] = dp[exitX][exitY];
-                }
-            }
-        }
-        for (int i = 0; i < rows; ++i) {
-            for (int j = 0; j < cols; ++j) {
-                cout << setw(4) << dp[i][j];
-            }
-            cout << endl;
-        }
-        traverseAllSameDp();
-        cout << endl;
-        cout << "动态规划表（最大资源值）：" << dp[maze.exitX][maze.exitY] - 100 << endl;
-        //printT();//打印资源表
+// 从二维字符数组加载迷宫的构造函数（保持不变）
+path_planning::path_planning(const vector<vector<char>>& m) : maze(m), maxScore(numeric_limits<int>::min()),
+minDistanceForMaxScore(numeric_limits<int>::max()) {
+    if (m.empty() || m[0].empty()) {
+        throw invalid_argument("迷宫不能为空。");
+    }
+    size = m.size();
+    findStartExitAndFeatures();
+}
+
+// 从CSV文件加载迷宫（保持不变）
+bool path_planning::loadMazeFromCSV(const string& filename) {
+    if (readMazeFromCSV(filename)) {
+        findStartExitAndFeatures();
         return true;
     }
-    // 获取坐标的资源价值（获取后清空资源）
-    int getResourceValue(int x, int y) {
-        auto it = resourceMap.find({ x, y });
-        if (it != resourceMap.end()) {
-            int value = it->second;
-            resourceMap.erase(it);
-            return value;
-        }
-        return 0;
-    }
-    void printT()
-    {
-        cout << endl;
-        cout << "动态规划表（最大资源值）：" << dp[maze.exitX][maze.exitY] << endl;
-        for (int i = 0; i < maze.size; i++) {
-            for (int j = 0; j < maze.size; j++)
-            {
-                if ((dp[i][j] == -1) && maze.grid[i][j] == '#')
-                {
-                    cout << setw(4) << '#' << " ";  // 4字符宽度，空格填充
-                }
-                else if ((dp[i][j] == -1) && maze.grid[i][j] == 'T')
-                {
-                    cout << setw(4) << "-3" << " ";  // 4字符宽度，空格填充
-                }
-                else if ((vvisited[i][j] == 1) && dp[i][j] > 0 || maze.grid[i][j] == 'S' || maze.grid[i][j] == 'E')
-                {
-                    cout << setw(4) << left << dp[maze.exitX][maze.exitY] << " ";  // 左对齐，4字符宽度
-                }
-                else
-                {
-                    cout << setw(4) << left << dp[i][j] << " ";  // 左对齐，4字符宽度
+    return false;
+}
+
+// 动态规划求解迷宫（优化版）
+void path_planning::solve() {
+    int num_gold = gold_locations.size();
+    int num_traps = trap_locations.size();
+    int total_features = num_gold + num_traps;
+    int max_mask = 1 << total_features;
+
+    // 使用更紧凑的数据结构表示DP状态
+    struct DPState {
+        int score;
+        int distance;
+        DPState() : score(numeric_limits<int>::min()), distance(numeric_limits<int>::max()) {}
+        DPState(int s, int d) : score(s), distance(d) {}
+    };
+
+    vector<vector<vector<DPState>>> dp(
+        size, vector<vector<DPState>>(
+            size, vector<DPState>(max_mask)
+        )
+    );
+
+    // 使用队列进行BFS，按距离处理状态
+    queue<tuple<int, int, int>> q;
+
+    // 初始化父节点信息
+    parent_pos.assign(size, vector<vector<pair<int, int>>>(size, vector<pair<int, int>>(max_mask, { -1, -1 })));
+    parent_mask.assign(size, vector<vector<int>>(size, vector<int>(max_mask, -1)));
+
+    // 初始状态：起点，mask为0，分数0，距离0
+    dp[startPos.second][startPos.first][0] = DPState(0, 0);
+    q.push({ startPos.second, startPos.first, 0 });
+
+    // 四个移动方向
+    const int dx[] = { 0, 0, 1, -1 };
+    const int dy[] = { 1, -1, 0, 0 };
+
+    // 按距离进行BFS
+    while (!q.empty()) {
+        auto current_tuple = q.front();
+        q.pop();
+        int y = get<0>(current_tuple);
+        int x = get<1>(current_tuple);
+        int mask = get<2>(current_tuple);
+        auto& current = dp[y][x][mask];
+
+        // 如果当前状态不是最优的，跳过（剪枝）
+        if (current.score == numeric_limits<int>::min()) continue;
+
+        // 如果已经到达终点，不需要继续扩展（剪枝）
+        if (y == exitPos.second && x == exitPos.first) continue;
+
+        // 检查所有可能的移动
+        for (int dir = 0; dir < 4; ++dir) {
+            int nx = x + dx[dir];
+            int ny = y + dy[dir];
+
+            // 检查边界和墙壁
+            if (nx < 0 || nx >= size || ny < 0 || ny >= size || maze[ny][nx] == '#') {
+                continue;
+            }
+
+            int new_mask = mask;
+            int score_change = 0;
+            char cell = maze[ny][nx];
+
+            // 处理金币和陷阱
+            if (cell == 'G') {
+                auto it = gold_map.find({ nx, ny });
+                if (it != gold_map.end()) {
+                    int gold_idx = it->second;
+                    if (!(mask & (1 << gold_idx))) {
+                        score_change += GOLD_VALUE;
+                        new_mask |= (1 << gold_idx);
+                    }
                 }
             }
-            cout << endl;
+            else if (cell == 'T') {
+                auto it = trap_map.find({ nx, ny });
+                if (it != trap_map.end()) {
+                    int trap_idx = it->second;
+                    int trap_bit_pos = num_gold + trap_idx;
+                    if (!(mask & (1 << trap_bit_pos))) {
+                        score_change += TRAP_PENALTY;
+                        new_mask |= (1 << trap_bit_pos);
+                    }
+                }
+            }
+
+            int new_score = current.score + score_change;
+            int new_dist = current.distance + 1;
+
+            // 更新DP表
+            auto& next_state = dp[ny][nx][new_mask];
+            bool need_update = false;
+
+            if (new_score > next_state.score) {
+                need_update = true;
+            }
+            else if (new_score == next_state.score && new_dist < next_state.distance) {
+                need_update = true;
+            }
+
+            if (need_update) {
+                next_state = DPState(new_score, new_dist);
+                parent_pos[ny][nx][new_mask] = { x, y };
+                parent_mask[ny][nx][new_mask] = mask;
+                q.push({ ny, nx, new_mask });
+            }
         }
     }
-};
+
+    // 在出口处寻找最佳状态
+    maxScore = numeric_limits<int>::min();
+    minDistanceForMaxScore = numeric_limits<int>::max();
+    int best_mask = -1;
+
+    for (int mask = 0; mask < max_mask; ++mask) {
+        const auto& state = dp[exitPos.second][exitPos.first][mask];
+        if (state.score > maxScore ||
+            (state.score == maxScore && state.distance < minDistanceForMaxScore)) {
+            maxScore = state.score;
+            minDistanceForMaxScore = state.distance;
+            best_mask = mask;
+        }
+    }
+
+    // 重建路径
+    if (best_mask != -1) {
+        optimalPath.clear();
+        pair<int, int> curr_pos = exitPos;
+        int curr_mask = best_mask;
+
+        while (curr_pos.first != -1) {
+            optimalPath.push_back(curr_pos);
+            auto prev_pos = parent_pos[curr_pos.second][curr_pos.first][curr_mask];
+            int prev_mask = parent_mask[curr_pos.second][curr_pos.first][curr_mask];
+            curr_pos = prev_pos;
+            curr_mask = prev_mask;
+        }
+        reverse(optimalPath.begin(), optimalPath.end());
+    }
+}
+
+// 获取最大分数（保持不变）
+int path_planning::getMaxScore() const {
+    return maxScore;
+}
+
+// 获取最短路径长度（保持不变）
+int path_planning::getMinDistance() const {
+    return minDistanceForMaxScore + 1;
+}
+
+// 获取最优路径（保持不变）
+const vector<pair<int, int>>& path_planning::getOptimalPath() const {
+    return optimalPath;
+}
+
+// 可视化路径（保持不变）
+void path_planning::visualizePath() const {
+    if (optimalPath.empty()) {
+        cout << "未找到路径或路径不可视化。" << endl;
+        return;
+    }
+
+    cout << "\n最优路径坐标与分数变化 (从起点到终点):" << endl;
+
+    const int GOLD_VALUE = 5;
+    const int TRAP_PENALTY = -3;
+
+    int currentScore = 0;
+    cout << "位置 1: (" << startPos.first << ", " << startPos.second
+        << ") [起点 S] [当前分数: " << currentScore << "]" << endl;
+
+    for (size_t i = 1; i < optimalPath.size() - 1; ++i) {
+        int x = optimalPath[i].first;
+        int y = optimalPath[i].second;
+        char cell = maze[y][x];
+        int scoreChange = 0;
+
+        if (cell == 'G') {
+            scoreChange = GOLD_VALUE;
+            currentScore += scoreChange;
+        }
+        else if (cell == 'T') {
+            scoreChange = TRAP_PENALTY;
+            currentScore += scoreChange;
+        }
+
+        cout << "位置 " << i + 1 << ": (" << x << ", " << y << ") ";
+
+        if (scoreChange != 0) {
+            cout << "[分数变化: " << (scoreChange > 0 ? "+" : "") << scoreChange
+                << " | 当前分数: " << currentScore << "]";
+        }
+        else {
+            cout << "[当前分数: " << currentScore << "]";
+        }
+        cout << endl;
+    }
+
+    currentScore = getMaxScore();
+    cout << "位置 " << optimalPath.size() << ": (" << exitPos.first << ", " << exitPos.second
+        << ") [终点 E] [当前分数: " << currentScore << "]" << endl;
+
+    cout << "\n路径总长度: " << optimalPath.size() << " 个单元格"
+        << " | 最终分数: " << getMaxScore() << endl;
+}

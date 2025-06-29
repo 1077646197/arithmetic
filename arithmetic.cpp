@@ -5,67 +5,18 @@
 #include"resource_collecting.h"
 #include "puzzle_solving.h"
 #include"boss_bettle.h"
-
+#include "path_planning.h"
 using namespace std;
 
-
-Maze generateFixedMaze() {
-    Maze maze;
-    maze.size = 15;
-    maze.startX = 3;
-    maze.startY = 14;
-    maze.exitX = 14;
-    maze.exitY = 13;
-
-    // 定义10×10固定迷宫布局（四周为墙，中间设计复杂通路）
-    const char* layout[20] = {
-        "###############",
-        "#GT TG#GT   # #",
-        "### ##### # # #",
-        "# # # #G# # #BS",
-        "# # # #T# # # #",
-        "#        T#  L#",
-        "# # ######### #",
-        "# #   # #TT   #",
-        "# #####G### # #",
-        "#T   G#     # #",
-        "#############T#",
-        "#T#       # TT#",
-        "#G# #T# # # # #",
-        "#   #G# #G  # #",
-        "#############E#"
-    };
-
-    // 安全复制迷宫布局到maze.grid
-    for (int i = 0; i < maze.size; ++i) {
-        snprintf(maze.grid[i], sizeof(maze.grid[i]), "%s", layout[i]);
-    }
-
-    // 输出迷宫布局用于测试
-    std::cout << "n×n固定测试迷宫布局：" << std::endl;
-    for (int i = 0; i < maze.size; ++i) {
-        std::cout << maze.grid[i] << std::endl;
-    }
-
-    return maze;
-}
 int main()
 {
 
-    Maze maze= generateFixedMaze();
-    //maze.init(7);  // 初始化7x7的迷宫
-    //divideAndConquerUniquePath(maze, 0, 0, maze.size - 1, maze.size - 1, VERTICAL);
-    //setStartExitUnique(maze);
-    //placeResourcesUnique(maze);
-
-    ResourcePathPlanner planner(maze);
-    if (planner.solveWithPruning()) {
-        planner.printT();
-    }
-    else {
-        std::cout << "无法找到从起点到终点的有效路径" << std::endl;
-    }
-
+    string mazeFilePath = R"(C:\Users\张喆\Desktop\maze_15_15_2.csv)";
+    path_planning planner(mazeFilePath);
+    planner.solve();
+    cout << "最大分数: " << planner.getMaxScore() << endl;
+    cout << "最短路径长度: " << planner.getMinDistance() << endl;
+    planner.visualizePath();
     //// 示例：设置目标哈希值（实际使用时应从安全存储中获取）
     //std::string targetHash = "003a44b04e2e9eac5eb7597955068e745d78bb18b17a60d26645beebe111de40";
 

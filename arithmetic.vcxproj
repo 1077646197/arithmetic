@@ -132,12 +132,16 @@
   <ItemGroup>
     <ClInclude Include="boss_bettle.h" />
     <ClInclude Include="maze.h" />
+    <ClInclude Include="path_planning.h" />
     <ClInclude Include="puzzle_solving.h" />
     <ClInclude Include="resource_collecting.h" />
     <ClInclude Include="route_planning.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\..\Downloads\input说明(1).txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\Documents\WeChat Files\wxid_m972igrfzwkj22\FileStorage\File\2025-06\maze_15_15_2.csv" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
