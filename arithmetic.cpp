@@ -55,7 +55,7 @@ int main()
 
     ResourcePathPlanner planner(maze);
     if (planner.solveWithPruning()) {
-        //int maxResource = planner.getMaxResourceValue();
+        planner.printT();
     }
     else {
         std::cout << "无法找到从起点到终点的有效路径" << std::endl;
