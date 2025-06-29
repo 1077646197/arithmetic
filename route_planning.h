@@ -59,7 +59,7 @@ public:
     // 检查坐标是否有效（非墙、非陷阱、在迷宫范围内）
     bool isValid(int x, int y) const {
         return x >= 0 && x < maze.size && y >= 0 && y < maze.size &&
-            maze.grid[x][y] != '#' && maze.grid[x][y] != 'T';
+            maze.grid[x][y] != '#';
     }
     void initialdp()
     {
@@ -195,7 +195,7 @@ public:
             for (const auto& dir : directions) {
                 int nx = x + dir[0];
                 int ny = y + dir[1];
-                if (dp[nx][ny] != -1&& dp[nx][ny]>0) {
+                if (isValid(nx, ny) && dp[nx][ny]>0) {
                     // 计算新路径的资源值，使用originalDp获取资源值
                     int newVal = currentVal + getResourceValue(nx, ny);
                     // 发现更优路径时更新
@@ -244,7 +244,9 @@ public:
                 }
                 cout << endl;
             }
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            // 停留0.5秒（原1秒的一半）
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            //std::this_thread::sleep_for(std::chrono::seconds(1));
         }
         for (size_t i = 0; i < finalPath.size(); i++) {
             cout << "步骤 " << setw(4) << left << i << ": (" << finalPath[i].first << ", " << finalPath[i].second << ")  ";
@@ -278,7 +280,7 @@ public:
             updated = false;
             for (int i = 0; i < rows; ++i) {
                 for (int j = 0; j < cols; ++j) {
-                    if (dp[i][j] == -1 || maze.grid[i][j] == 'S' || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
+                    if (!isValid(i, j) || maze.grid[i][j] == 'S' || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
                         continue;
                     }
 
@@ -288,7 +290,7 @@ public:
                     for (const auto& dir : directions) {
                         int ni = i + dir[0];
                         int nj = j + dir[1];
-                        if (dp[ni][nj] != -1 && vvisited[ni][nj] == 0) {
+                        if (isValid(ni, nj) && vvisited[ni][nj] == 0) {
                             neighborCount++;
                             nX = ni;
                             nY = nj;
@@ -329,7 +331,7 @@ public:
             updated = false;
             for (int i = 0; i < rows; ++i) {
                 for (int j = 0; j < cols; ++j) {
-                    if (dp[i][j] == -1 || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
+                    if (!isValid(i, j) || maze.grid[i][j] == 'E' || vvisited[i][j] == 1) {
                         continue;
                     }
 
@@ -339,7 +341,7 @@ public:
                     for (const auto& dir : directions) {
                         int ni = i + dir[0];
                         int nj = j + dir[1];
-                        if ((dp[ni][nj] != -1) && vvisited[ni][nj] != 1) {
+                        if (isValid(ni, nj)&& vvisited[ni][nj] != 1) {
                             neighborCount++;
                             nX = ni;
                             nY = nj;
@@ -357,6 +359,8 @@ public:
             }
         }
         solve();////规划路径
+        cout << endl;
+        cout << "动态规划表（最大资源值）：" << dp[maze.exitX][maze.exitY] - 100 << endl;
         //printT();//打印资源表
         return true;
     }

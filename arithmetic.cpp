@@ -11,20 +11,20 @@ using namespace std;
 Maze generateFixedMaze() {
     Maze maze;
     maze.size = 10;
-    maze.startX = 6;
-    maze.startY = 3;
+    maze.startX = 1;
+    maze.startY = 0;
     maze.exitX = 8;
-    maze.exitY = 5;
+    maze.exitY = 9;
 
     // 定义10×10固定迷宫布局（四周为墙，中间设计复杂通路）
     const char* layout[20] = {
         "##########",
-        "# G     ##",
+        "S G     ##",
         "### ### ##",
         "# G  G#G##",
         "# # #T#T##",
         "# # ######",
-        "# #S  T G#",
+        "# #   T G#",
         "# ########",
         "#G  T    E",
         "##########"
