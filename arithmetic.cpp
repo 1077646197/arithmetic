@@ -14,7 +14,7 @@ Maze generateFixedMaze() {
     maze.startX = 6;
     maze.startY = 3;
     maze.exitX = 8;
-    maze.exitY = 8;
+    maze.exitY = 5;
 
     // 定义10×10固定迷宫布局（四周为墙，中间设计复杂通路）
     const char* layout[20] = {
@@ -26,7 +26,7 @@ Maze generateFixedMaze() {
         "# # ######",
         "# #S  T G#",
         "# ########",
-        "#G  T   E#",
+        "#G  T    E",
         "##########"
     };
 
