@@ -377,41 +377,5 @@ void MazePathFinder::displayPath() const {
         std::cout << "未找到有效路径或无法显示路径。" << std::endl;
         return;
     }
-
-    std::cout << "\n最优路径详情（从起点到终点）：" << std::endl;
-    int currentScore = 0;
-    std::cout << "位置 1: (" << startPoint.first << ", " << startPoint.second
-        << ") [起点 S] 分数: " << currentScore << std::endl;
-
-    for (size_t i = 1; i < bestPath.size() - 1; ++i) {
-        int x = bestPath[i].first;
-        int y = bestPath[i].second;
-        char cell = grid[y][x];
-        int scoreChange = 0;
-
-        if (cell == 'G') {
-            scoreChange = COIN_SCORE;
-            currentScore += scoreChange;
-        }
-        else if (cell == 'T') {
-            scoreChange = TRAP_DEDUCTION;
-            currentScore += scoreChange;
-        }
-
-        std::cout << "位置 " << i + 1 << ": (" << x << ", " << y << ") ";
-        if (scoreChange != 0) {
-            std::cout << "[分数变化: " << (scoreChange > 0 ? "+" : "") << scoreChange
-                << " 当前分数: " << currentScore << "]";
-        }
-        else {
-            std::cout << "[当前分数: " << currentScore << "]";
-        }
-        std::cout << std::endl;
-    }
-
-    currentScore = getHighestScore();
-    std::cout << "位置 " << bestPath.size() << ": (" << endPoint.first << ", " << endPoint.second
-        << ") [终点 E] 最终分数: " << currentScore << std::endl;
-
     std::cout << "\n路径总长度: " << bestPath.size() << " 格 | 最高分数: " << getHighestScore() << std::endl;
 }
