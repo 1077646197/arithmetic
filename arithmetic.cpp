@@ -8,26 +8,32 @@
 
 using namespace std;
 
+
 Maze generateFixedMaze() {
     Maze maze;
-    maze.size = 10;
-    maze.startX = 1;
-    maze.startY = 0;
-    maze.exitX = 8;
-    maze.exitY = 9;
+    maze.size = 15;
+    maze.startX = 3;
+    maze.startY = 14;
+    maze.exitX = 14;
+    maze.exitY = 13;
 
     // 定义10×10固定迷宫布局（四周为墙，中间设计复杂通路）
     const char* layout[20] = {
-        "##########",
-        "S G     ##",
-        "### ### ##",
-        "# G  G#G##",
-        "# # #T#T##",
-        "# # ######",
-        "# #   T G#",
-        "# ########",
-        "#G  T    E",
-        "##########"
+        "###############",
+        "#GT TG#GT   # #",
+        "### ##### # # #",
+        "# # # #G# # #BS",
+        "# # # #T# # # #",
+        "#        T#  L#",
+        "# # ######### #",
+        "# #   # #TT   #",
+        "# #####G### # #",
+        "#T   G#     # #",
+        "#############T#",
+        "#T#       # TT#",
+        "#G# #T# # # # #",
+        "#   #G# #G  # #",
+        "#############E#"
     };
 
     // 安全复制迷宫布局到maze.grid
@@ -43,7 +49,6 @@ Maze generateFixedMaze() {
 
     return maze;
 }
-
 int main()
 {
 

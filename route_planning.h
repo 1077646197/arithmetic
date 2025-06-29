@@ -245,7 +245,7 @@ public:
         int exitY = maze.exitY;
         int rows = maze.size;
         int cols = maze.size;
-
+        
         // 检查起点终点有效性
         if (!isValid(startX, startY)) {
             throw runtime_error("起点不可通行");
@@ -254,7 +254,6 @@ public:
             throw runtime_error("终点不可通行");
         }
         initialdp();//初始化dp表
-
         // 第一阶段：剪枝（移除单邻居节点）
         bool updated = true;
         const int directions[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
@@ -293,17 +292,14 @@ public:
         int t_num = 0;
         for (int i = 0; i < rows; ++i) {
             for (int j = 0; j < cols; ++j) {
-                if (vvisited[i][j] == 0 && maze.grid[i][j] == 'T')//主路经陷阱清除
+                if (dp[i][j] == -3 && !vvisited[i][j])//主路经陷阱清除
                 {
                     t_num++;
                     dp[i][j] = 0;
                 }
-                else if ((vvisited[i][j] == 1) && dp[i][j] > 0 || maze.grid[i][j] == 'S')//可用值强化
-                {
-                    dp[i][j] += 100;
-                }
             }
         }
+        dp[startX][startY] += 100;
         dp[startX][startY] -= 3 * t_num;//起点加载
         updated = 1;
         while (updated) {
@@ -343,6 +339,12 @@ public:
                     dp[i][j] = dp[exitX][exitY];
                 }
             }
+        }
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                cout << setw(4) << dp[i][j];
+            }
+            cout << endl;
         }
         traverseAllSameDp();
         cout << endl;
