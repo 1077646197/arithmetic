@@ -2,6 +2,17 @@
 #include <algorithm>
 #include <climits>
 #include <queue>
+#include <iomanip>
+#include <thread>
+#include <chrono>
+#include <iostream>
+
+// 定义ANSI颜色宏（需确保终端支持）
+#define ANSI_COLOR_GREEN "\033[32m"
+#define ANSI_COLOR_BLUE "\033[34m"
+#define ANSI_COLOR_RED "\033[31m"
+#define ANSI_COLOR_YELLOW "\033[33m"
+#define ANSI_COLOR_RESET "\033[0m"
 
 // 从迷宫中找出起点、终点、金币和陷阱的位置（保持不变）
 void path_planning::findStartExitAndFeatures() {
@@ -233,6 +244,40 @@ void path_planning::solve() {
             curr_mask = prev_mask;
         }
         reverse(optimalPath.begin(), optimalPath.end());
+
+        // 使用新的输出方式显示路径
+        vector<pair<int, int>> finalPath = optimalPath;
+        for (size_t i = 0; i < finalPath.size(); i++) {
+            system("cls");  // 清屏（Windows系统），Linux/Mac可替换为"clear"
+            cout << "步骤 " << setw(4) << left << i << ": ("
+                << finalPath[i].first << ", " << finalPath[i].second << ")  " << endl;
+            // 绘制迷宫
+            for (int j = 0; j < size; ++j) {
+                for (int k = 0; k < size; ++k) {
+                    // 当前路径位置
+                    if (finalPath[i].first == k && finalPath[i].second == j) {  // 注意坐标对应关系（x=k, y=j）
+                        cout << ANSI_COLOR_GREEN << "&" << ANSI_COLOR_RESET;
+                    }
+                    // 墙壁
+                    else if (maze[j][k] == '#') {
+                        cout << ANSI_COLOR_BLUE << maze[j][k] << ANSI_COLOR_RESET;
+                    }
+                    // 陷阱
+                    else if (maze[j][k] == 'T') {
+                        cout << ANSI_COLOR_RED << maze[j][k] << ANSI_COLOR_RESET;
+                    }
+                    // 资源点（金币等）
+                    else if (maze[j][k] == 'G' || maze[j][k] == 'L' || maze[j][k] == 'B') {
+                        cout << ANSI_COLOR_YELLOW << maze[j][k] << ANSI_COLOR_RESET;
+                    }
+                    else {
+                        cout << maze[j][k];
+                    }
+                }
+                cout << endl;
+            }
+            this_thread::sleep_for(chrono::milliseconds(300));  // 适当减慢速度
+        }
     }
 }
 
@@ -251,7 +296,7 @@ const vector<pair<int, int>>& path_planning::getOptimalPath() const {
     return optimalPath;
 }
 
-// 可视化路径（保持不变）
+// 可视化路径（原输出方式保留，若需可注释）
 void path_planning::visualizePath() const {
     if (optimalPath.empty()) {
         cout << "未找到路径或路径不可视化。" << endl;
