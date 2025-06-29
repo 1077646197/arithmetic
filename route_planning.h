@@ -1,4 +1,3 @@
-#include "path_planning.h"
 #include <algorithm>
 #include <climits>
 #include <queue>
@@ -6,343 +5,413 @@
 #include <thread>
 #include <chrono>
 #include <iostream>
+#include <vector>
+#include <string>
+#include <map>
+#include <limits>
+#include <fstream>
+#include <sstream>
+#include <utility>
+#include <tuple>
 
-// 定义ANSI颜色宏（需确保终端支持）
-#define ANSI_COLOR_GREEN "\033[32m"
-#define ANSI_COLOR_BLUE "\033[34m"
-#define ANSI_COLOR_RED "\033[31m"
-#define ANSI_COLOR_YELLOW "\033[33m"
-#define ANSI_COLOR_RESET "\033[0m"
+// 定义ANSI颜色宏（终端支持时生效）
+#define COLOR_GREEN "\033[32m"
+#define COLOR_BLUE "\033[34m"
+#define COLOR_RED "\033[31m"
+#define COLOR_YELLOW "\033[33m"
+#define COLOR_RESET "\033[0m"
 
-// 从迷宫中找出起点、终点、金币和陷阱的位置（保持不变）
-void path_planning::findStartExitAndFeatures() {
-    int gold_idx = 0;
-    int trap_idx = 0;
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
-            if (maze[i][j] == 'S') startPos = { j, i };
-            else if (maze[i][j] == 'E') exitPos = { j, i };
-            else if (maze[i][j] == 'G') {
-                gold_locations.push_back({ j, i });
-                gold_map[{j, i}] = gold_idx++;
+// 定义分数常量
+const int COIN_SCORE = 5;      // 金币得分
+const int TRAP_DEDUCTION = -3; // 陷阱扣分
+
+class MazePathFinder {
+private:
+    // 迷宫基础信息
+    std::vector<std::vector<char>> grid;  // 迷宫网格
+    int gridSize;                         // 网格尺寸
+
+    // 关键位置信息
+    std::pair<int, int> startPoint;       // 起点坐标
+    std::pair<int, int> endPoint;         // 终点坐标
+
+    // 特殊元素信息
+    std::vector<std::pair<int, int>> coinPositions;  // 金币位置列表
+    std::map<std::pair<int, int>, int> coinIndexMap; // 金币索引映射
+    std::vector<std::pair<int, int>> trapPositions;  // 陷阱位置列表
+    std::map<std::pair<int, int>, int> trapIndexMap; // 陷阱索引映射
+
+    // 动态规划相关
+    std::vector<std::vector<std::vector<std::pair<int, int>>>> dpTable; // DP表：[y][x][mask] = {分数, 距离}
+    std::vector<std::vector<std::vector<std::pair<int, int>>>> prevPositions; // 父节点位置
+    std::vector<std::vector<std::vector<int>>> prevMasks; // 父节点状态
+
+    // 结果数据
+    std::vector<std::pair<int, int>> bestPath;  // 最优路径
+    int highestScore;                           // 最高得分
+    int shortestDistance;                       // 最高得分对应的最短距离
+
+    // 私有方法
+    void identifyKeyPositions();                // 识别关键位置
+    bool loadGridFromCSV(const std::string& filename); // 从CSV加载网格
+
+public:
+    // 构造函数
+    MazePathFinder();
+    explicit MazePathFinder(const std::string& filename);
+    explicit MazePathFinder(const std::vector<std::vector<char>>& gridData);
+
+    // 公共方法
+    bool reloadGridFromCSV(const std::string& filename); // 重新加载CSV网格
+    void calculateOptimalPath();                        // 计算最优路径
+
+    // 结果获取
+    int getHighestScore() const;                        // 获取最高得分
+    int getShortestDistance() const;                    // 获取最短距离
+    const std::vector<std::pair<int, int>>& getBestPath() const; // 获取最优路径
+
+    // 路径可视化
+    void displayPath() const;                           // 显示路径详情
+};
+
+// 识别起点、终点、金币和陷阱位置
+void MazePathFinder::identifyKeyPositions() {
+    int coinIdx = 0;
+    int trapIdx = 0;
+    for (int i = 0; i < gridSize; ++i) {
+        for (int j = 0; j < gridSize; ++j) {
+            if (grid[i][j] == 'S') {
+                startPoint = { j, i };
             }
-            else if (maze[i][j] == 'T') {
-                trap_locations.push_back({ j, i });
-                trap_map[{j, i}] = trap_idx++;
+            else if (grid[i][j] == 'E') {
+                endPoint = { j, i };
+            }
+            else if (grid[i][j] == 'G') {
+                coinPositions.push_back({ j, i });
+                coinIndexMap[{j, i}] = coinIdx++;
+            }
+            else if (grid[i][j] == 'T') {
+                trapPositions.push_back({ j, i });
+                trapIndexMap[{j, i}] = trapIdx++;
             }
         }
     }
 }
 
-// 从CSV文件读取迷宫地图（保持不变）
-bool path_planning::readMazeFromCSV(const string& filename) {
-    ifstream file(filename);
+// 从CSV文件读取迷宫数据
+bool MazePathFinder::loadGridFromCSV(const std::string& filename) {
+    std::ifstream file(filename);
     if (!file.is_open()) {
-        cerr << "无法打开文件: " << filename << endl;
+        std::cerr << "无法打开文件: " << filename << std::endl;
         return false;
     }
 
-    string line;
-    maze.clear();
+    std::string line;
+    grid.clear();
 
-    while (getline(file, line)) {
-        vector<char> row;
-        stringstream ss(line);
-        string cell;
+    while (std::getline(file, line)) {
+        std::vector<char> row;
+        std::stringstream lineStream(line);
+        std::string cell;
 
-        while (getline(ss, cell, ',')) {
+        while (std::getline(lineStream, cell, ',')) {
             if (!cell.empty()) {
                 row.push_back(cell[0]);
             }
         }
 
         if (!row.empty()) {
-            maze.push_back(row);
+            grid.push_back(row);
         }
     }
 
     file.close();
 
-    if (maze.empty() || maze[0].empty()) {
-        cerr << "迷宫不能为空。" << endl;
+    if (grid.empty() || grid[0].empty()) {
+        std::cerr << "迷宫数据不能为空。" << std::endl;
         return false;
     }
 
-    size = maze.size();
+    gridSize = grid.size();
     return true;
 }
 
-// 默认构造函数（保持不变）
-path_planning::path_planning() : size(0), maxScore(numeric_limits<int>::min()),
-minDistanceForMaxScore(numeric_limits<int>::max()) {}
+// 默认构造函数
+MazePathFinder::MazePathFinder() : gridSize(0), highestScore(std::numeric_limits<int>::min()),
+shortestDistance(std::numeric_limits<int>::max()) {}
 
-// 从CSV文件加载迷宫的构造函数（保持不变）
-path_planning::path_planning(const string& filename) : maxScore(numeric_limits<int>::min()),
-minDistanceForMaxScore(numeric_limits<int>::max()) {
-    if (!readMazeFromCSV(filename)) {
-        throw invalid_argument("无法从CSV文件加载迷宫。");
+// 从CSV文件构造
+MazePathFinder::MazePathFinder(const std::string& filename) : highestScore(std::numeric_limits<int>::min()),
+shortestDistance(std::numeric_limits<int>::max()) {
+    if (!loadGridFromCSV(filename)) {
+        throw std::invalid_argument("无法从CSV文件加载迷宫数据。");
     }
-    findStartExitAndFeatures();
+    identifyKeyPositions();
 }
 
-// 从二维字符数组加载迷宫的构造函数（保持不变）
-path_planning::path_planning(const vector<vector<char>>& m) : maze(m), maxScore(numeric_limits<int>::min()),
-minDistanceForMaxScore(numeric_limits<int>::max()) {
-    if (m.empty() || m[0].empty()) {
-        throw invalid_argument("迷宫不能为空。");
+// 从网格数据构造
+MazePathFinder::MazePathFinder(const std::vector<std::vector<char>>& gridData) : grid(gridData),
+highestScore(std::numeric_limits<int>::min()),
+shortestDistance(std::numeric_limits<int>::max()) {
+    if (gridData.empty() || gridData[0].empty()) {
+        throw std::invalid_argument("迷宫数据不能为空。");
     }
-    size = m.size();
-    findStartExitAndFeatures();
+    gridSize = gridData.size();
+    identifyKeyPositions();
 }
 
-// 从CSV文件加载迷宫（保持不变）
-bool path_planning::loadMazeFromCSV(const string& filename) {
-    if (readMazeFromCSV(filename)) {
-        findStartExitAndFeatures();
+// 重新加载CSV迷宫
+bool MazePathFinder::reloadGridFromCSV(const std::string& filename) {
+    if (loadGridFromCSV(filename)) {
+        identifyKeyPositions();
         return true;
     }
     return false;
 }
 
-// 动态规划求解迷宫（优化版）
-void path_planning::solve() {
-    int num_gold = gold_locations.size();
-    int num_traps = trap_locations.size();
-    int total_features = num_gold + num_traps;
-    int max_mask = 1 << total_features;
+// 计算最优路径（动态规划实现）
+void MazePathFinder::calculateOptimalPath() {
+    int coinCount = coinPositions.size();
+    int trapCount = trapPositions.size();
+    int totalElements = coinCount + trapCount;
+    int maxState = 1 << totalElements;
 
-    // 使用更紧凑的数据结构表示DP状态
-    struct DPState {
+    // 定义状态结构体
+    struct StateInfo {
         int score;
         int distance;
-        DPState() : score(numeric_limits<int>::min()), distance(numeric_limits<int>::max()) {}
-        DPState(int s, int d) : score(s), distance(d) {}
+        StateInfo() : score(std::numeric_limits<int>::min()), distance(std::numeric_limits<int>::max()) {}
+        StateInfo(int s, int d) : score(s), distance(d) {}
     };
 
-    vector<vector<vector<DPState>>> dp(
-        size, vector<vector<DPState>>(
-            size, vector<DPState>(max_mask)
+    // 初始化DP表
+    std::vector<std::vector<std::vector<StateInfo>>> dp(
+        gridSize, std::vector<std::vector<StateInfo>>(
+            gridSize, std::vector<StateInfo>(maxState)
         )
     );
 
-    // 使用队列进行BFS，按距离处理状态
-    queue<tuple<int, int, int>> q;
+    // BFS队列
+    std::queue<std::tuple<int, int, int>> processingQueue;
 
-    // 初始化父节点信息
-    parent_pos.assign(size, vector<vector<pair<int, int>>>(size, vector<pair<int, int>>(max_mask, { -1, -1 })));
-    parent_mask.assign(size, vector<vector<int>>(size, vector<int>(max_mask, -1)));
+    // 初始化父节点记录
+    prevPositions.assign(gridSize, std::vector<std::vector<std::pair<int, int>>>(
+        gridSize, std::vector<std::pair<int, int>>(maxState, { -1, -1 })
+    ));
+    prevMasks.assign(gridSize, std::vector<std::vector<int>>(
+        gridSize, std::vector<int>(maxState, -1)
+    ));
 
-    // 初始状态：起点，mask为0，分数0，距离0
-    dp[startPos.second][startPos.first][0] = DPState(0, 0);
-    q.push({ startPos.second, startPos.first, 0 });
+    // 起点初始化
+    dp[startPoint.second][startPoint.first][0] = StateInfo(0, 0);
+    processingQueue.push({ startPoint.second, startPoint.first, 0 });
 
-    // 四个移动方向
-    const int dx[] = { 0, 0, 1, -1 };
-    const int dy[] = { 1, -1, 0, 0 };
+    // 移动方向
+    const int dirX[] = { 0, 0, 1, -1 };
+    const int dirY[] = { 1, -1, 0, 0 };
 
-    // 按距离进行BFS
-    while (!q.empty()) {
-        auto current_tuple = q.front();
-        q.pop();
-        int y = get<0>(current_tuple);
-        int x = get<1>(current_tuple);
-        int mask = get<2>(current_tuple);
-        auto& current = dp[y][x][mask];
+    // BFS处理
+    while (!processingQueue.empty()) {
+        auto current = processingQueue.front();
+        processingQueue.pop();
+        int y = std::get<0>(current);
+        int x = std::get<1>(current);
+        int state = std::get<2>(current);
+        auto& currentState = dp[y][x][state];
 
-        // 如果当前状态不是最优的，跳过（剪枝）
-        if (current.score == numeric_limits<int>::min()) continue;
+        // 剪枝：跳过无效状态
+        if (currentState.score == std::numeric_limits<int>::min()) continue;
 
-        // 如果已经到达终点，不需要继续扩展（剪枝）
-        if (y == exitPos.second && x == exitPos.first) continue;
+        // 到达终点不再扩展
+        if (y == endPoint.second && x == endPoint.first) continue;
 
-        // 检查所有可能的移动
+        // 探索四个方向
         for (int dir = 0; dir < 4; ++dir) {
-            int nx = x + dx[dir];
-            int ny = y + dy[dir];
+            int newX = x + dirX[dir];
+            int newY = y + dirY[dir];
 
-            // 检查边界和墙壁
-            if (nx < 0 || nx >= size || ny < 0 || ny >= size || maze[ny][nx] == '#') {
+            // 边界与障碍物检查
+            if (newX < 0 || newX >= gridSize || newY < 0 || newY >= gridSize || grid[newY][newX] == '#') {
                 continue;
             }
 
-            int new_mask = mask;
-            int score_change = 0;
-            char cell = maze[ny][nx];
+            int newState = state;
+            int scoreChange = 0;
+            char cellType = grid[newY][newX];
 
-            // 处理金币和陷阱
-            if (cell == 'G') {
-                auto it = gold_map.find({ nx, ny });
-                if (it != gold_map.end()) {
-                    int gold_idx = it->second;
-                    if (!(mask & (1 << gold_idx))) {
-                        score_change += GOLD_VALUE;
-                        new_mask |= (1 << gold_idx);
+            // 处理金币
+            if (cellType == 'G') {
+                auto it = coinIndexMap.find({ newX, newY });
+                if (it != coinIndexMap.end()) {
+                    int coinIdx = it->second;
+                    if (!(state & (1 << coinIdx))) {
+                        scoreChange += COIN_SCORE;
+                        newState |= (1 << coinIdx);
                     }
                 }
             }
-            else if (cell == 'T') {
-                auto it = trap_map.find({ nx, ny });
-                if (it != trap_map.end()) {
-                    int trap_idx = it->second;
-                    int trap_bit_pos = num_gold + trap_idx;
-                    if (!(mask & (1 << trap_bit_pos))) {
-                        score_change += TRAP_PENALTY;
-                        new_mask |= (1 << trap_bit_pos);
+            // 处理陷阱
+            else if (cellType == 'T') {
+                auto it = trapIndexMap.find({ newX, newY });
+                if (it != trapIndexMap.end()) {
+                    int trapIdx = it->second;
+                    int trapBit = coinCount + trapIdx;
+                    if (!(state & (1 << trapBit))) {
+                        scoreChange += TRAP_DEDUCTION;
+                        newState |= (1 << trapBit);
                     }
                 }
             }
 
-            int new_score = current.score + score_change;
-            int new_dist = current.distance + 1;
+            // 计算新状态值
+            int updatedScore = currentState.score + scoreChange;
+            int updatedDist = currentState.distance + 1;
 
-            // 更新DP表
-            auto& next_state = dp[ny][nx][new_mask];
-            bool need_update = false;
+            // 更新DP状态
+            auto& nextState = dp[newY][newX][newState];
+            bool needUpdate = false;
 
-            if (new_score > next_state.score) {
-                need_update = true;
+            if (updatedScore > nextState.score) {
+                needUpdate = true;
             }
-            else if (new_score == next_state.score && new_dist < next_state.distance) {
-                need_update = true;
+            else if (updatedScore == nextState.score && updatedDist < nextState.distance) {
+                needUpdate = true;
             }
 
-            if (need_update) {
-                next_state = DPState(new_score, new_dist);
-                parent_pos[ny][nx][new_mask] = { x, y };
-                parent_mask[ny][nx][new_mask] = mask;
-                q.push({ ny, nx, new_mask });
+            if (needUpdate) {
+                nextState = StateInfo(updatedScore, updatedDist);
+                prevPositions[newY][newX][newState] = { x, y };
+                prevMasks[newY][newX][newState] = state;
+                processingQueue.push({ newY, newX, newState });
             }
         }
     }
 
-    // 在出口处寻找最佳状态
-    maxScore = numeric_limits<int>::min();
-    minDistanceForMaxScore = numeric_limits<int>::max();
-    int best_mask = -1;
+    // 查找最优终点状态
+    highestScore = std::numeric_limits<int>::min();
+    shortestDistance = std::numeric_limits<int>::max();
+    int bestState = -1;
 
-    for (int mask = 0; mask < max_mask; ++mask) {
-        const auto& state = dp[exitPos.second][exitPos.first][mask];
-        if (state.score > maxScore ||
-            (state.score == maxScore && state.distance < minDistanceForMaxScore)) {
-            maxScore = state.score;
-            minDistanceForMaxScore = state.distance;
-            best_mask = mask;
+    for (int state = 0; state < maxState; ++state) {
+        const auto& endState = dp[endPoint.second][endPoint.first][state];
+        if (endState.score > highestScore ||
+            (endState.score == highestScore && endState.distance < shortestDistance)) {
+            highestScore = endState.score;
+            shortestDistance = endState.distance;
+            bestState = state;
         }
     }
 
-    // 重建路径
-    if (best_mask != -1) {
-        optimalPath.clear();
-        pair<int, int> curr_pos = exitPos;
-        int curr_mask = best_mask;
+    // 重建路径并可视化
+    if (bestState != -1) {
+        bestPath.clear();
+        std::pair<int, int> currentPos = endPoint;
+        int currentState = bestState;
 
-        while (curr_pos.first != -1) {
-            optimalPath.push_back(curr_pos);
-            auto prev_pos = parent_pos[curr_pos.second][curr_pos.first][curr_mask];
-            int prev_mask = parent_mask[curr_pos.second][curr_pos.first][curr_mask];
-            curr_pos = prev_pos;
-            curr_mask = prev_mask;
+        // 回溯构建路径
+        while (currentPos.first != -1) {
+            bestPath.push_back(currentPos);
+            auto prevPos = prevPositions[currentPos.second][currentPos.first][currentState];
+            int prevState = prevMasks[currentPos.second][currentPos.first][currentState];
+            currentPos = prevPos;
+            currentState = prevState;
         }
-        reverse(optimalPath.begin(), optimalPath.end());
+        std::reverse(bestPath.begin(), bestPath.end());
 
-        // 使用新的输出方式显示路径
-        vector<pair<int, int>> finalPath = optimalPath;
-        for (size_t i = 0; i < finalPath.size(); i++) {
-            system("cls");  // 清屏（Windows系统），Linux/Mac可替换为"clear"
-            cout << "步骤 " << setw(4) << left << i << ": ("
-                << finalPath[i].first << ", " << finalPath[i].second << ")  " << endl;
+        // 路径可视化输出
+        std::vector<std::pair<int, int>> pathToShow = bestPath;
+        for (size_t i = 0; i < pathToShow.size(); ++i) {
+            system("cls");  // 清屏（Windows系统）
+            std::cout << "步骤 " << std::setw(4) << std::left << i << ": ("
+                << pathToShow[i].first << ", " << pathToShow[i].second << ")  " << std::endl;
+
             // 绘制迷宫
-            for (int j = 0; j < size; ++j) {
-                for (int k = 0; k < size; ++k) {
-                    // 当前路径位置
-                    if (finalPath[i].first == k && finalPath[i].second == j) {  // 注意坐标对应关系（x=k, y=j）
-                        cout << ANSI_COLOR_GREEN << "&" << ANSI_COLOR_RESET;
+            for (int j = 0; j < gridSize; ++j) {
+                for (int k = 0; k < gridSize; ++k) {
+                    // 当前位置标记
+                    if (pathToShow[i].first == k && pathToShow[i].second == j) {
+                        std::cout << COLOR_GREEN << "&" << COLOR_RESET;
+                        grid[j][k] = ' ';
                     }
                     // 墙壁
-                    else if (maze[j][k] == '#') {
-                        cout << ANSI_COLOR_BLUE << maze[j][k] << ANSI_COLOR_RESET;
+                    else if (grid[j][k] == '#') {
+                        std::cout << COLOR_BLUE << grid[j][k] << COLOR_RESET;
                     }
                     // 陷阱
-                    else if (maze[j][k] == 'T') {
-                        cout << ANSI_COLOR_RED << maze[j][k] << ANSI_COLOR_RESET;
+                    else if (grid[j][k] == 'T') {
+                        std::cout << COLOR_RED << grid[j][k] << COLOR_RESET;
                     }
-                    // 资源点（金币等）
-                    else if (maze[j][k] == 'G' || maze[j][k] == 'L' || maze[j][k] == 'B') {
-                        cout << ANSI_COLOR_YELLOW << maze[j][k] << ANSI_COLOR_RESET;
+                    // 资源点
+                    else if (grid[j][k] == 'G' || grid[j][k] == 'L' || grid[j][k] == 'B') {
+                        std::cout << COLOR_YELLOW << grid[j][k] << COLOR_RESET;
                     }
                     else {
-                        cout << maze[j][k];
+                        std::cout << grid[j][k];
                     }
                 }
-                cout << endl;
+                std::cout << std::endl;
             }
-            this_thread::sleep_for(chrono::milliseconds(300));  // 适当减慢速度
+            std::this_thread::sleep_for(std::chrono::milliseconds(300)); // 延迟显示
         }
     }
 }
 
-// 获取最大分数（保持不变）
-int path_planning::getMaxScore() const {
-    return maxScore;
+// 获取最高得分
+int MazePathFinder::getHighestScore() const {
+    return highestScore;
 }
 
-// 获取最短路径长度（保持不变）
-int path_planning::getMinDistance() const {
-    return minDistanceForMaxScore + 1;
+// 获取最短距离
+int MazePathFinder::getShortestDistance() const {
+    return shortestDistance + 1;
 }
 
-// 获取最优路径（保持不变）
-const vector<pair<int, int>>& path_planning::getOptimalPath() const {
-    return optimalPath;
+// 获取最优路径
+const std::vector<std::pair<int, int>>& MazePathFinder::getBestPath() const {
+    return bestPath;
 }
 
-// 可视化路径（原输出方式保留，若需可注释）
-void path_planning::visualizePath() const {
-    if (optimalPath.empty()) {
-        cout << "未找到路径或路径不可视化。" << endl;
+// 显示路径详情
+void MazePathFinder::displayPath() const {
+    if (bestPath.empty()) {
+        std::cout << "未找到有效路径或无法显示路径。" << std::endl;
         return;
     }
 
-    cout << "\n最优路径坐标与分数变化 (从起点到终点):" << endl;
-
-    const int GOLD_VALUE = 5;
-    const int TRAP_PENALTY = -3;
-
+    std::cout << "\n最优路径详情（从起点到终点）：" << std::endl;
     int currentScore = 0;
-    cout << "位置 1: (" << startPos.first << ", " << startPos.second
-        << ") [起点 S] [当前分数: " << currentScore << "]" << endl;
+    std::cout << "位置 1: (" << startPoint.first << ", " << startPoint.second
+        << ") [起点 S] 分数: " << currentScore << std::endl;
 
-    for (size_t i = 1; i < optimalPath.size() - 1; ++i) {
-        int x = optimalPath[i].first;
-        int y = optimalPath[i].second;
-        char cell = maze[y][x];
+    for (size_t i = 1; i < bestPath.size() - 1; ++i) {
+        int x = bestPath[i].first;
+        int y = bestPath[i].second;
+        char cell = grid[y][x];
         int scoreChange = 0;
 
         if (cell == 'G') {
-            scoreChange = GOLD_VALUE;
+            scoreChange = COIN_SCORE;
             currentScore += scoreChange;
         }
         else if (cell == 'T') {
-            scoreChange = TRAP_PENALTY;
+            scoreChange = TRAP_DEDUCTION;
             currentScore += scoreChange;
         }
 
-        cout << "位置 " << i + 1 << ": (" << x << ", " << y << ") ";
-
+        std::cout << "位置 " << i + 1 << ": (" << x << ", " << y << ") ";
         if (scoreChange != 0) {
-            cout << "[分数变化: " << (scoreChange > 0 ? "+" : "") << scoreChange
-                << " | 当前分数: " << currentScore << "]";
+            std::cout << "[分数变化: " << (scoreChange > 0 ? "+" : "") << scoreChange
+                << " 当前分数: " << currentScore << "]";
         }
         else {
-            cout << "[当前分数: " << currentScore << "]";
+            std::cout << "[当前分数: " << currentScore << "]";
         }
-        cout << endl;
+        std::cout << std::endl;
     }
 
-    currentScore = getMaxScore();
-    cout << "位置 " << optimalPath.size() << ": (" << exitPos.first << ", " << exitPos.second
-        << ") [终点 E] [当前分数: " << currentScore << "]" << endl;
+    currentScore = getHighestScore();
+    std::cout << "位置 " << bestPath.size() << ": (" << endPoint.first << ", " << endPoint.second
+        << ") [终点 E] 最终分数: " << currentScore << std::endl;
 
-    cout << "\n路径总长度: " << optimalPath.size() << " 个单元格"
-        << " | 最终分数: " << getMaxScore() << endl;
+    std::cout << "\n路径总长度: " << bestPath.size() << " 格 | 最高分数: " << getHighestScore() << std::endl;
 }

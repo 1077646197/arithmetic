@@ -132,7 +132,6 @@
   <ItemGroup>
     <ClInclude Include="boss_bettle.h" />
     <ClInclude Include="maze.h" />
-    <ClInclude Include="path_planning.h" />
     <ClInclude Include="puzzle_solving.h" />
     <ClInclude Include="resource_collecting.h" />
     <ClInclude Include="route_planning.h" />

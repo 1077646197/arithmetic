@@ -5,18 +5,24 @@
 #include"resource_collecting.h"
 #include "puzzle_solving.h"
 #include"boss_bettle.h"
-#include "path_planning.h"
 using namespace std;
 
 int main()
 {
 
     string mazeFilePath = R"(C:\Users\张喆\Desktop\maze_15_15_2.csv)";
-    path_planning planner(mazeFilePath);
-    planner.solve();
-    cout << "最大分数: " << planner.getMaxScore() << endl;
-    cout << "最短路径长度: " << planner.getMinDistance() << endl;
-    planner.visualizePath();
+
+    MazePathFinder planner(mazeFilePath);
+
+    // 计算最优路径（包含动态规划求解和可视化过程）
+    planner.calculateOptimalPath();
+
+    // 输出结果信息
+    std::cout << "最大分数: " << planner.getHighestScore() << std::endl;
+    std::cout << "最短路径长度: " << planner.getShortestDistance() << std::endl;
+
+    // 显示路径详细信息（文本形式）
+    planner.displayPath();
     //// 示例：设置目标哈希值（实际使用时应从安全存储中获取）
     //std::string targetHash = "003a44b04e2e9eac5eb7597955068e745d78bb18b17a60d26645beebe111de40";
 
