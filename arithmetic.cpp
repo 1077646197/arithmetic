@@ -4,25 +4,26 @@
 #include"maze.h"
 #include"resource_collecting.h"
 #include "puzzle_solving.h"
-#include"boss_bettle.h"
+#include "boss_bettle.h"
+
 using namespace std;
 
 int main()
 {
 
-    string mazeFilePath = R"(C:\Users\张喆\Desktop\maze_15_15_2.csv)";
+    //string mazeFilePath = R"(C:\Users\张喆\Desktop\maze_15_15_2.csv)";
 
-    MazePathFinder planner(mazeFilePath);
+    //MazePathFinder planner(mazeFilePath);
 
-    // 计算最优路径（包含动态规划求解和可视化过程）
-    planner.calculateOptimalPath();
+    //// 计算最优路径（包含动态规划求解和可视化过程）
+    //planner.calculateOptimalPath();
 
-    // 输出结果信息
-    std::cout << "最大分数: " << planner.getHighestScore() << std::endl;
-    std::cout << "最短路径长度: " << planner.getShortestDistance() << std::endl;
+    //// 输出结果信息
+    //std::cout << "最大分数: " << planner.getHighestScore() << std::endl;
+    //std::cout << "最短路径长度: " << planner.getShortestDistance() << std::endl;
 
     // 显示路径详细信息（文本形式）
-    planner.displayPath();
+   /* planner.displayPath();*/
     //// 示例：设置目标哈希值（实际使用时应从安全存储中获取）
     //std::string targetHash = "003a44b04e2e9eac5eb7597955068e745d78bb18b17a60d26645beebe111de40";
 
@@ -36,18 +37,23 @@ int main()
     //guessPassword(clues, resources, targetHash);
 
 
-    //// 示例：BOSS血量100，玩家有3个技能
-    //int bossHP = 100;
-    //std::vector<std::vector<int>> skills = {
-    //    {5, 0},  // 普通攻击：伤害5，无冷却
-    //    {10, 2}, // 大招：伤害10，冷却2回合
-    //    {15, 3}  // 超级技能：伤害15，冷却3回合
-    //};
+ 
 
-    //std::vector<int> optimalSequence = findOptimalSkillSequence(bossHP, skills);
-    //printSkillSequence(optimalSequence, skills);
+        vector<int> bossHP = { 13, 13, 20 };
+        vector<vector<int>> skills = {
+              // 普通攻击：伤害6，冷却2
+            {9, 5},   // 小技能：伤害2，冷却0
+                       // 中技能：伤害4，冷却1
+            {3,0}
+        };
+        int maxRounds = 100;
 
-    return 0;
+        vector<int> sequence = findOptimalSkillSequence(bossHP, skills, maxRounds);
+        printSkillSequence(sequence, skills, bossHP);
+
+        return 0;
+
+
 }
 // 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单
 // 调试程序: F5 或调试 >“开始调试”菜单
