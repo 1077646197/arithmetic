@@ -1,6 +1,4 @@
 ﻿#include <iostream>
-#include <cstring>
-#include"route_planning.h"
 #include"maze.h"
 #include"resource_collecting.h"
 #include "puzzle_solving.h"
@@ -8,8 +6,9 @@
 
 using namespace std;
 
-int main()
-{
+int main() {
+    int n;
+    cout << "请输入迷宫的尺寸（建议为奇数，最小为7）: ";
 
     //string mazeFilePath = R"(C:\Users\张喆\Desktop\maze_15_15_2.csv)";
 
@@ -36,6 +35,8 @@ int main()
     //// 开始回溯猜测密码
     //guessPassword(clues, resources, targetHash);
 
+    // 创建资源拾取策略
+    ResourcePickingStrategy strategy(generator.getMaze());
 
  
 

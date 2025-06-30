@@ -23,22 +23,11 @@
     <ClInclude Include="maze.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="boss_bettle.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="puzzle_solving.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="resource_collecting.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="route_planning.h">
       <Filter>头文件</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="..\..\Downloads\input说明(1).txt">
-      <Filter>资源文件</Filter>
-    </Text>
+    <ClInclude Include="greed.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
