@@ -30,10 +30,10 @@ int main() {
    // 
    // 
     //// 示例：设置目标哈希值（实际使用时应从安全存储中获取）
-   std::string targetHash = "326960df220484eac8297b66170e13bd251c6dd53fd02492a0602df9d3a695b2";
+   std::string targetHash = "0902e62b2d2d441abab9984e314067c0ce74bd5589f2603d2b47eb40c4498b74";
 
     //// 示例线索
-    std::vector<std::vector<int>> clues = { { 3,1 }};
+   std::vector<std::vector<int>> clues = { { 1,1 },{-1,2,-1} };
 
     //// 初始资源数量(替换为玩家资源)
     int resources = 1000;
