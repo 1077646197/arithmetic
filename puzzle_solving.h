@@ -232,7 +232,7 @@ bool checkClues(const std::string& password, const std::vector<std::vector<int>>
 }
 
 // 回溯法生成所有可能的密码组合
-bool backtrack(std::vector<int>& combination, std::vector<bool>& used,
+bool backtrack(std::vector<int>& combination,
     const std::vector<std::vector<int>>& clues,
     int& resources, const std::string& targetHash, bool& found) {
 
@@ -260,16 +260,15 @@ bool backtrack(std::vector<int>& combination, std::vector<bool>& used,
 
     // 尝试每一个可能的数字
     for (int digit = 0; digit <= 9; digit++) {
-        if (!used[digit]) {
+        if (1) {
             // 选择当前数字
             combination.push_back(digit);
-            used[digit] = true;
 
             // 检查当前选择是否有效
             if (isValid(combination, clues)) {
                 // 继续生成下一位
                 if (resources > 0 && !found) {
-                    if (backtrack(combination, used, clues, resources, targetHash, found)) {
+                    if (backtrack(combination, clues, resources, targetHash, found)) {
                         return true;
                     }
                 }
@@ -277,7 +276,6 @@ bool backtrack(std::vector<int>& combination, std::vector<bool>& used,
 
             // 回溯：撤销选择
             combination.pop_back();
-            used[digit] = false;
         }
     }
 
@@ -287,11 +285,10 @@ bool backtrack(std::vector<int>& combination, std::vector<bool>& used,
 // 主函数：使用回溯法猜测密码
 void guessPassword(const std::vector<std::vector<int>>& clues, int& resources, const std::string& targetHash) {
     std::vector<int> combination;
-    std::vector<bool> used(10, false);
     bool found = false;
 
     std::cout << "开始使用回溯法猜密码！" << std::endl;
-    backtrack(combination, used, clues, resources, targetHash, found);
+    backtrack(combination, clues, resources, targetHash, found);
 
     if (!found) {
         std::cout << "没有更多可能的密码组合了！" << std::endl;

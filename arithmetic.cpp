@@ -17,28 +17,29 @@ int main() {
     //// 计算最优路径（包含动态规划求解和可视化过程）
     //planner.calculateOptimalPath();
 
+
     //// 输出结果信息
     //std::cout << "最大分数: " << planner.getHighestScore() << std::endl;
     //std::cout << "最短路径长度: " << planner.getShortestDistance() << std::endl;
 
     // 显示路径详细信息（文本形式）
    /* planner.displayPath();*/
-    //// 示例：设置目标哈希值（实际使用时应从安全存储中获取）
-    //std::string targetHash = "003a44b04e2e9eac5eb7597955068e745d78bb18b17a60d26645beebe111de40";
 
-    //// 示例线索：每位都是不重复的素数
-    //std::vector<std::vector<int>> clues = { {1,1} ,{ 2,0 },{,1} };
+     // 创建资源拾取策略
+   // ResourcePickingStrategy strategy(generator.getMaze());
+   // 
+   // 
+    //// 示例：设置目标哈希值（实际使用时应从安全存储中获取）
+   std::string targetHash = "326960df220484eac8297b66170e13bd251c6dd53fd02492a0602df9d3a695b2";
+
+    //// 示例线索
+    std::vector<std::vector<int>> clues = { { 3,1 }};
 
     //// 初始资源数量(替换为玩家资源)
-    //int resources = 100;
+    int resources = 1000;
 
     //// 开始回溯猜测密码
-    //guessPassword(clues, resources, targetHash);
-
-    // 创建资源拾取策略
-    ResourcePickingStrategy strategy(generator.getMaze());
-
- 
+    guessPassword(clues, resources, targetHash);
 
         vector<int> bossHP = { 13, 13, 20 };
         vector<vector<int>> skills = {
