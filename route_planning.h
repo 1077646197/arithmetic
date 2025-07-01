@@ -1,395 +1,525 @@
-#include <algorithm>    // 提供算法函数（如std::reverse、std::max等）
-#include <climits>      // 提供整数极限值宏（如INT_MAX）
-#include <queue>        // 提供队列容器（用于BFS）
-#include <iomanip>      // 提供输入输出格式控制（如setw）
-#include <thread>       // 提供线程相关功能（用于延迟显示）
-#include <chrono>       // 提供时间相关功能（用于控制延迟）
-#include <iostream>     // 提供输入输出流
-#include <vector>       // 提供动态数组容器
-#include <string>       // 提供字符串类
-#include <map>          // 提供映射容器（键值对存储）
-#include <limits>       // 提供数值极限（如std::numeric_limits）
-#include <fstream>      // 提供文件输入输出流
-#include <sstream>      // 提供字符串流（用于解析CSV）
-#include <utility>      // 提供pair模板（存储坐标等成对数据）
-#include <tuple>        // 提供tuple模板（存储多元组数据）
+#pragma once
+#include <iostream>
+#include <vector>
+#include <map>
+#include <stack>
+#include <algorithm>
+#include <stdexcept>
+#include "maze.h"
+#include <queue>
+#include <iomanip>
+#include <functional>
+#include <thread>
+#include <chrono> 
+#include <set> 
+#include <unordered_set>
 
-// 定义ANSI颜色宏（终端支持时生效，用于美化输出）
-#define COLOR_GREEN "\033[32m"   // 绿色（当前位置标记）
-#define COLOR_BLUE "\033[34m"    // 蓝色（墙壁）
-#define COLOR_RED "\033[31m"     // 红色（陷阱）
-#define COLOR_YELLOW "\033[33m"  // 黄色（资源点如金币）
-#define COLOR_RESET "\033[0m"    // 重置颜色
+// ANSI 颜色控制码宏定义
+#define ANSI_COLOR_GREEN "\033[32m"   // 绿色文本
+#define ANSI_COLOR_BLUE "\033[34m"    // 蓝色文本
+#define ANSI_COLOR_RED "\033[31m"     // 红色文本
+#define ANSI_COLOR_YELLOW "\033[33m"  // 黄色文本
+#define ANSI_COLOR_RESET "\033[0m"    // 重置为默认颜色
 
-// 定义分数常量
-const int COIN_SCORE = 5;       // 收集金币获得的分数
-const int TRAP_DEDUCTION = -3;  // 触发陷阱扣除的分数
+using namespace std;
+#define MAX_SIZE 101  // 最大迷宫尺寸
+// 迷宫结构体
+struct Maze {
+    char grid[MAX_SIZE][MAX_SIZE];
+    int size;
+    int startX, startY;
+    int exitX, exitY;
 
-class MazePathFinder {
+    // 初始化迷宫
+    void init(int s) {
+        if (s < 7 || s > MAX_SIZE || s % 2 == 0) {
+            std::cerr << "错误：迷宫尺寸必须是大于等于7且小于等于" << MAX_SIZE << "的奇数" << std::endl;
+            exit(1);
+        }
+        size = s;
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                grid[i][j] = '#';
+            }
+        }
+    }
+};
+
+// 资源点结构体，包含坐标和价值
+struct ResourcePoint {
+    int x, y;     // 坐标
+    int value;    // 资源价值（陷阱为负值）
+    ResourcePoint(int _x, int _y, int _value) : x(_x), y(_y), value(_value) {}
+};
+
+// 路径规划器类
+class ResourcePathPlanner {
 private:
-    // 迷宫基础信息
-    std::vector<std::vector<char>> grid;  // 迷宫网格：存储每个单元格的字符（'S'起点、'E'终点等）
-    int gridSize;                         // 网格尺寸：假设为正方形迷宫，记录边长
+    Maze maze;                            // 迷宫对象
+    vector<vector<int>> dp;               // 动态规划表
+    vector<vector<int>> dp2;              // dp2数组
+    vector<pair<int, int>> fullPath;      // 完整路径存储
+    map<pair<int, int>, int> resourceMap;  // 资源映射表
+    vector<vector<pair<int, int>>> predecessor;  // 前驱节点存储
+    int prunedPathResource;               // 剪枝法路径的总资源值
+    bool vvisited[20][20];
+    bool visited[20][20];                 // 访问标记数组
+    vector<pair<int, int>> validPoints;   // 收集的有效点集合(dp>0且与起点连通)
+    int requiredPointsCount;              // 需要访问的点的数量
+    vector<pair<int, int>> path;          // 当前回溯路径
+    vector<vector<pair<int, int>>> allPaths; // 所有可能路径
+    int startX, startY, exitX, exitY;     // 起点和终点坐标
+    const int dirs[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} }; // 方向数组
 
-    // 关键位置信息
-    std::pair<int, int> startPoint;       // 起点坐标：(x, y)
-    std::pair<int, int> endPoint;         // 终点坐标：(x, y)
+    // 坐标转键值（辅助函数）
+    pair<int, int> makePair(int x, int y) const {
+        return make_pair(x, y);
+    }
 
-    // 特殊元素信息
-    std::vector<std::pair<int, int>> coinPositions;  // 所有金币位置列表
-    std::map<std::pair<int, int>, int> coinIndexMap; // 金币位置到索引的映射（用于状态掩码）
-    std::vector<std::pair<int, int>> trapPositions;  // 所有陷阱位置列表
-    std::map<std::pair<int, int>, int> trapIndexMap; // 陷阱位置到索引的映射（用于状态掩码）
+    // 获取当前资源值（不清除资源，用于剪枝）
+    int getCurrentResourceValue(int x, int y) const {
+        auto it = resourceMap.find(makePair(x, y));
+        return (it != resourceMap.end()) ? it->second : 0;
+    }
 
-    // 动态规划相关
-    // DP表：[y][x][mask] = {分数, 距离}，记录在坐标(x,y)、状态mask下的最大分数和对应距离
-    std::vector<std::vector<std::vector<std::pair<int, int>>>> dpTable;
-    // 父节点位置：记录每个状态的前一步坐标，用于回溯路径
-    std::vector<std::vector<std::vector<std::pair<int, int>>>> prevPositions;
-    // 父节点状态：记录每个状态的前一步掩码，用于回溯路径
-    std::vector<std::vector<std::vector<int>>> prevMasks;
+    // 检查两点是否连通
+    bool isConnected(int startX, int startY, int targetX, int targetY) {
+        vector<vector<bool>> visited(maze.size, vector<bool>(maze.size, false));
+        queue<pair<int, int>> q;
+        q.push(make_pair(startX, startY));
+        visited[startX][startY] = true;
 
-    // 结果数据
-    std::vector<std::pair<int, int>> bestPath;  // 最优路径：按顺序存储路径坐标
-    int highestScore;                           // 最高得分：最优路径的总分数
-    int shortestDistance;                       // 最短距离：最高得分对应的路径长度
+        while (!q.empty()) {
+            pair<int, int> curr = q.front();
+            q.pop();
+            int x = curr.first;
+            int y = curr.second;
 
-    // 私有方法
-    void identifyKeyPositions();                // 识别关键位置（起点、终点、金币、陷阱）
-    bool loadGridFromCSV(const std::string& filename); // 从CSV文件加载迷宫网格数据
+            if (x == targetX && y == targetY) {
+                return true;
+            }
+
+            for (int d = 0; d < 4; ++d) {
+                int nx = x + dirs[d][0];
+                int ny = y + dirs[d][1];
+
+                if (nx >= 0 && nx < maze.size && ny >= 0 && ny < maze.size &&
+                    isValid(nx, ny) && !visited[nx][ny]) {
+                    q.push(make_pair(nx, ny));
+                    visited[nx][ny] = true;
+                }
+            }
+        }
+        return false;
+    }
+    // 判断是否为分支点（多于1个未访问的有效邻居）
+    bool isBranchPoint(int x, int y, const vector<vector<bool>>& pathVisited) {
+        int neighborCount = 0;
+        for (int d = 0; d < 4; ++d) {
+            int nx = x + dirs[d][0];
+            int ny = y + dirs[d][1];
+            if (isValid(nx, ny) && dp[nx][ny] > 0 && !pathVisited[nx][ny]) {
+                neighborCount++;
+            }
+        }
+        return neighborCount > 1;
+    }
+
+    // 回溯函数
+    bool backtrack(int x, int y, vector<vector<bool>>& pathVisited,
+        vector<pair<int, int>>& currentPath, int visitedCount) {
+        // 将当前点加入路径
+        currentPath.push_back(make_pair(x, y));
+        pathVisited[x][y] = true;
+
+        // 检查是否访问了所有有效点并到达终点
+        if (x == exitX && y == exitY && visitedCount == requiredPointsCount) {
+            fullPath = currentPath;
+            return true;
+        }
+
+        // 探索四个方向
+        for (int d = 0; d < 4; ++d) {
+            int nx = x + dirs[d][0];
+            int ny = y + dirs[d][1];
+
+            if (isValid(nx, ny) && dp[nx][ny] > 0 && !pathVisited[nx][ny]) {
+                // 计算访问的有效点数
+                int newVisitedCount = visitedCount;
+                if (find(validPoints.begin(), validPoints.end(), make_pair(nx, ny)) != validPoints.end()) {
+                    newVisitedCount++;
+                }
+
+                if (backtrack(nx, ny, pathVisited, currentPath, newVisitedCount)) {
+                    return true;
+                }
+            }
+        }
+
+        // 回溯：从路径中移除当前点，标记为未访问
+        currentPath.pop_back();
+        pathVisited[x][y] = false;
+
+        // 如果是分支点，尝试其他路径
+        if (isBranchPoint(x, y, pathVisited)) {
+            return false; // 继续尝试其他分支
+        }
+
+        return false;
+    }
 
 public:
     // 构造函数
-    MazePathFinder();
-    explicit MazePathFinder(const std::string& filename);  // 从CSV文件构造
-    explicit MazePathFinder(const std::vector<std::vector<char>>& gridData);  // 从网格数据构造
+    ResourcePathPlanner(const Maze& m) : maze(m), prunedPathResource(0) {
+        startX = maze.startX;
+        startY = maze.startY;
+        exitX = maze.exitX;
+        exitY = maze.exitY;
 
-    // 公共方法
-    bool reloadGridFromCSV(const std::string& filename); // 重新加载CSV网格数据
-    void calculateOptimalPath();                        // 计算最优路径（核心方法）
-
-    // 结果获取
-    int getHighestScore() const;                        // 获取最高得分
-    int getShortestDistance() const;                    // 获取最高得分对应的最短距离
-    const std::vector<std::pair<int, int>>& getBestPath() const; // 获取最优路径
-
-    // 路径可视化
-    void displayPath() const;                           // 显示路径详情
-};
-
-// 识别起点、终点、金币和陷阱位置，并记录其坐标和索引映射
-void MazePathFinder::identifyKeyPositions() {
-    int coinIdx = 0;  // 金币索引计数器
-    int trapIdx = 0;  // 陷阱索引计数器
-    // 遍历网格的每个单元格
-    for (int i = 0; i < gridSize; ++i) {
-        for (int j = 0; j < gridSize; ++j) {
-            if (grid[i][j] == 'S') {  // 识别起点
-                startPoint = { j, i };  // 存储起点坐标(x=j, y=i)
-            }
-            else if (grid[i][j] == 'E') {  // 识别终点
-                endPoint = { j, i };  // 存储终点坐标(x=j, y=i)
-            }
-            else if (grid[i][j] == 'G') {  // 识别金币
-                coinPositions.push_back({ j, i });  // 添加金币坐标到列表
-                coinIndexMap[{j, i}] = coinIdx++;  // 建立坐标到索引的映射
-            }
-            else if (grid[i][j] == 'T') {  // 识别陷阱
-                trapPositions.push_back({ j, i });  // 添加陷阱坐标到列表
-                trapIndexMap[{j, i}] = trapIdx++;  // 建立坐标到索引的映射
-            }
-        }
-    }
-}
-
-// 从CSV文件读取迷宫数据（单元格以逗号分隔）
-bool MazePathFinder::loadGridFromCSV(const std::string& filename) {
-    std::ifstream file(filename);  // 打开CSV文件
-    if (!file.is_open()) {  // 检查文件是否成功打开
-        std::cerr << "无法打开文件: " << filename << std::endl;
-        return false;
-    }
-
-    std::string line;  // 存储每行数据
-    grid.clear();  // 清空现有网格数据
-
-    // 逐行读取文件
-    while (std::getline(file, line)) {
-        std::vector<char> row;  // 存储一行的单元格数据
-        std::stringstream lineStream(line);  // 将行字符串转换为流
-        std::string cell;  // 存储每个单元格数据
-
-        // 按逗号分割单元格
-        while (std::getline(lineStream, cell, ',')) {
-            if (!cell.empty()) {  // 忽略空单元格
-                row.push_back(cell[0]);  // 取单元格第一个字符作为网格值
+        // 初始化访问标记数组
+        for (int i = 0; i < 20; ++i) {
+            for (int j = 0; j < 20; ++j) {
+                visited[i][j] = false;
             }
         }
 
-        if (!row.empty()) {  // 忽略空行
-            grid.push_back(row);
+        // 初始化动态规划表
+        dp.resize(maze.size, vector<int>(maze.size, -1e9));
+        dp2.resize(maze.size, vector<int>(maze.size, -1));
+        predecessor.resize(maze.size, vector<pair<int, int>>(maze.size, make_pair(-1, -1)));
+        initializeResourceMap();
+    }
+
+    // 检查坐标是否有效（非墙、在迷宫范围内）
+    bool isValid(int x, int y) const {
+        return x >= 0 && x < maze.size && y >= 0 && y < maze.size &&
+            maze.grid[x][y] != '#';
+    }
+
+    // 初始化dp表
+    void initialdp() {
+        for (int i = 0; i < maze.size; ++i) {
+            for (int j = 0; j < maze.size; ++j) {
+                if (isValid(i, j)) {
+                    dp[i][j] = getCurrentResourceValue(i, j);
+                }
+                else if (maze.grid[i][j] == 'T') {
+                    dp[i][j] = -3;
+                }
+                else {
+                    dp[i][j] = -1;
+                }
+            }
         }
     }
 
-    file.close();  // 关闭文件
-
-    // 检查网格数据有效性
-    if (grid.empty() || grid[0].empty()) {
-        std::cerr << "迷宫数据不能为空。" << std::endl;
-        return false;
+    // 初始化资源映射表（从迷宫矩阵提取资源价值）
+    void initializeResourceMap() {
+        resourceMap.clear();
+        for (int i = 0; i < maze.size; ++i) {
+            for (int j = 0; j < maze.size; ++j) {
+                char cell = maze.grid[i][j];
+                if (cell == 'G') {
+                    resourceMap[makePair(i, j)] = 5;
+                }
+                else if (cell == 'L') {
+                    resourceMap[makePair(i, j)] = 10;
+                }
+                else if (cell == 'B') {
+                    resourceMap[makePair(i, j)] = 20;
+                }
+                else if (cell == 'T') {
+                    resourceMap[makePair(i, j)] = -3;
+                }
+            }
+        }
+    }
+    // 判断是否为分支点（多于2个有效邻居）
+    bool isfp(int x, int y) {
+        int neighborCount = 0;
+        for (int d = 0; d < 4; ++d) {
+            int ni = x + dirs[d][0];
+            int nj = y + dirs[d][1];
+            if (isValid(ni, nj) && dp[ni][nj] > 0) {
+                neighborCount++;
+            }
+        }
+        return neighborCount > 2;
     }
 
-    gridSize = grid.size();  // 设置网格尺寸（假设为正方形）
-    return true;
-}
-
-// 默认构造函数：初始化成员变量为默认值
-MazePathFinder::MazePathFinder() : gridSize(0), highestScore(std::numeric_limits<int>::min()),
-shortestDistance(std::numeric_limits<int>::max()) {}
-
-// 从CSV文件构造：加载文件并识别关键位置，失败则抛出异常
-MazePathFinder::MazePathFinder(const std::string& filename) : highestScore(std::numeric_limits<int>::min()),
-shortestDistance(std::numeric_limits<int>::max()) {
-    if (!loadGridFromCSV(filename)) {
-        throw std::invalid_argument("无法从CSV文件加载迷宫数据。");
+    // 判断是否为末端点（3个无效邻居）
+    bool isfq(int x, int y) {
+        int neighborCount = 0;
+        for (int d = 0; d < 4; ++d) {
+            int ni = x + dirs[d][0];
+            int nj = y + dirs[d][1];
+            if (isValid(ni, nj) && dp[ni][nj] > 0) {
+                neighborCount++;
+            }
+        }
+        return neighborCount == 1;
     }
-    identifyKeyPositions();
-}
-
-// 从网格数据构造：使用提供的网格数据，识别关键位置，失败则抛出异常
-MazePathFinder::MazePathFinder(const std::vector<std::vector<char>>& gridData) : grid(gridData),
-highestScore(std::numeric_limits<int>::min()),
-shortestDistance(std::numeric_limits<int>::max()) {
-    if (gridData.empty() || gridData[0].empty()) {
-        throw std::invalid_argument("迷宫数据不能为空。");
+    // 获取坐标的资源价值（获取后清空资源）
+    int getResourceValue(int x, int y) {
+        auto it = resourceMap.find(make_pair(x, y));
+        if (it != resourceMap.end()) {
+            int value = it->second;
+            resourceMap.erase(it);
+            return value;
+        }
+        return 0;
     }
-    gridSize = gridData.size();  // 设置网格尺寸
-    identifyKeyPositions();  // 识别关键位置
-}
 
-// 重新加载CSV迷宫数据：先加载文件，再识别关键位置
-bool MazePathFinder::reloadGridFromCSV(const std::string& filename) {
-    if (loadGridFromCSV(filename)) {  // 加载成功后更新关键位置
-        identifyKeyPositions();
+    // 打印动态规划表
+    void printT() {
+        cout << endl << "动态规划表（最大资源值）:" << dp[maze.exitX][maze.exitY] << endl;
+        for (int i = 0; i < maze.size; ++i) {
+            for (int j = 0; j < maze.size; ++j) {
+                if (maze.grid[i][j] == '#') {
+                    cout << setw(4) << '#' << " ";
+                }
+                else if (maze.grid[i][j] == 'T') {
+                    cout << setw(4) << "-3" << " ";
+                }
+                else if ((visited[i][j] && dp[i][j] > 0) || maze.grid[i][j] == 'S' || maze.grid[i][j] == 'E') {
+                    cout << setw(4) << left << dp[maze.exitX][maze.exitY] << " ";
+                }
+                else {
+                    cout << setw(4) << left << dp[i][j] << " ";
+                }
+            }
+            cout << endl;
+        }
+        // 输出dp2数组（包含0值节点）
+        cout << "dp2数组（包含>=0的节点）：" << endl;
+        for (int i = 0; i < maze.size; ++i) {
+            for (int j = 0; j < maze.size; ++j) {
+                cout << setw(4) << dp2[i][j];
+            }
+            cout << endl;
+        }
+    }
+    // 动态规划路径优化函数（剪枝法）
+    bool solveWithPruning() {
+        int startX = maze.startX;
+        int startY = maze.startY;
+        int exitX = maze.exitX;
+        int exitY = maze.exitY;
+        int rows = maze.size;
+        int cols = maze.size;
+
+        // 检查起点终点有效性
+        if (!isValid(startX, startY)) {
+            throw runtime_error("起点不可通行");
+        }
+        if (!isValid(exitX, exitY)) {
+            throw runtime_error("终点不可通行");
+        }
+
+        initialdp(); // 初始化dp表
+        dp[startX][startY] += 100; // 起点初始值加成
+
+        // 第一阶段：剪枝（移除单邻居节点）
+        bool updated = true;
+        while (updated) {
+            updated = false;
+            for (int i = 0; i < rows; ++i) {
+                for (int j = 0; j < cols; ++j) {
+                    if (!isValid(i, j) || maze.grid[i][j] == 'E' || vvisited[i][j]) {
+                        continue;
+                    }
+
+                    // 统计可用邻居
+                    int neighborCount = 0;
+                    int nX = -1, nY = -1;
+                    for (int d = 0; d < 4; ++d) {
+                        int ni = i + dirs[d][0];
+                        int nj = j + dirs[d][1];
+                        if (isValid(ni, nj) && !vvisited[ni][nj]) {
+                            neighborCount++;
+                            nX = ni;
+                            nY = nj;
+                        }
+                    }
+
+                    // 处理末端点（确保dp2=0被包含）
+                    if (neighborCount == 1 && isfq(i, j)) {
+                        dp2[i][j] = 0; // 明确设置为0，确保被纳入遍历
+                    }
+
+                    // 单邻居节点剪枝
+                    if (neighborCount == 1 && nX != -1 && nY != -1) {
+                        vvisited[i][j] = true;
+                        updated = true;
+                        // 资源值传递
+                        if (dp[i][j] > 0) {
+                            dp[nX][nY] += dp[i][j];
+                        }
+                    }
+                }
+            }
+        }
+
+        // 输出dp2数组（包含0值节点）
+        cout << "dp2数组（包含>=0的节点）：" << endl;
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                dp2[i][j] = 0;
+            }
+        }
+
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                if (dp[i][j] > 0) {
+                    for (int d = 0; d < 4; ++d) {
+                        int ni = i + dirs[d][0];
+                        int nj = j + dirs[d][1];
+                        if (!isValid(ni, nj))continue;
+                        if (dp[ni][nj] > 0) {
+                            dp2[i][j]++;
+                        }
+                    }
+                    if ((dp[i][j] > 100 && maze.grid[i][j] != 'E' && maze.grid[i][j] != 'S')) {
+                        dp2[i][j]--;
+                    }
+                    if (isfq(i, j) && maze.grid[i][j] != 'E' && maze.grid[i][j] != 'S') {
+                        dp2[i][j]++;
+                    }
+                }
+            }
+        }
+        solve();
+        // 执行按dp2值遍历（包含0值节点）
+
         return true;
     }
-    return false;
-}
+    bool solve() {
+        int startX = maze.startX, startY = maze.startY;
+        int exitX = maze.exitX, exitY = maze.exitY;
 
-// 计算最优路径（动态规划+广度优先搜索实现）
-void MazePathFinder::calculateOptimalPath() {
-    int coinCount = coinPositions.size();  // 金币数量
-    int trapCount = trapPositions.size();  // 陷阱数量
-    int totalElements = coinCount + trapCount;  // 特殊元素总数（用于状态掩码）
-    int maxState = 1 << totalElements;  // 最大状态数（2^总元素数，每个元素代表是否被访问）
+        // 检查起点有效性
+        if (!isValid(startX, startY)) {
+            throw runtime_error("起点不可通行");
+        }
 
-    // 定义状态结构体：存储分数和距离
-    struct StateInfo {
-        int score;    // 当前状态的分数
-        int distance; // 当前状态的距离（步数）
-        StateInfo() : score(std::numeric_limits<int>::min()), distance(std::numeric_limits<int>::max()) {}  // 默认初始化（无效状态）
-        StateInfo(int s, int d) : score(s), distance(d) {}  // 带参数的构造函数
-    };
+        // 初始化路径记录
+        vector<vector<vector<pair<int, int>>>> path(maze.size, vector<vector<pair<int, int>>>(maze.size));
+        vector<vector<pair<int, int>>> parent(maze.size, vector<pair<int, int>>(maze.size, { -1, -1 }));
+        // 备份原始dp2数组，用于显示
+        int finalpath[400][2]; int steps = 0;
+        vector<vector<int>> originalDp2 = dp2;
 
-    // 初始化DP表：[y][x][mask] -> 状态信息
-    std::vector<std::vector<std::vector<StateInfo>>> dp(
-        gridSize, std::vector<std::vector<StateInfo>>(
-            gridSize, std::vector<StateInfo>(maxState)
-        )
-    );
+        // 起点初始化
+        path[startX][startY].push_back({ startX, startY });
+        dp2[startX][startY]--; // 减少起点的可用次数
 
-    // BFS队列：存储待处理的状态（y坐标, x坐标, 状态掩码）
-    std::queue<std::tuple<int, int, int>> processingQueue;
+        // 使用优先队列按dp2值降序处理节点
+        priority_queue<pair<int, pair<int, int>>> pq;
+        pq.push({ dp2[startX][startY], {startX, startY} });
 
-    // 初始化父节点记录：用于回溯路径
-    prevPositions.assign(gridSize, std::vector<std::vector<std::pair<int, int>>>(
-        gridSize, std::vector<std::pair<int, int>>(maxState, { -1, -1 })  // 初始化为无效坐标
-    ));
-    prevMasks.assign(gridSize, std::vector<std::vector<int>>(
-        gridSize, std::vector<int>(maxState, -1)  // 初始化为无效状态
-    ));
+        // 四个移动方向
+        const int directions[4][2] = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} };
 
-    // 起点初始化：起点位置，初始状态（掩码0，未收集任何元素）
-    dp[startPoint.second][startPoint.first][0] = StateInfo(0, 0);  // 初始分数0，距离0
-    processingQueue.push({ startPoint.second, startPoint.first, 0 });  // 将起点加入队列
+        while (!pq.empty()) {
+            int currentDp2 = pq.top().first;
+            int x = pq.top().second.first;
+            int y = pq.top().second.second;
 
-    // 移动方向：上、下、右、左（y和x的变化量）
-    const int dirX[] = { 0, 0, 1, -1 };
-    const int dirY[] = { 1, -1, 0, 0 };
+            pq.pop();
 
-    // BFS处理：遍历所有可达状态
-    while (!processingQueue.empty()) {
-        auto current = processingQueue.front();  // 取出队首状态
-        processingQueue.pop();  // 移除队首状态
-        int y = std::get<0>(current);  // 当前y坐标
-        int x = std::get<1>(current);  // 当前x坐标
-        int state = std::get<2>(current);  // 当前状态掩码
-        auto& currentState = dp[y][x][state];  // 当前状态信息
-
-        // 剪枝：跳过无效状态（未被访问过）
-        if (currentState.score == std::numeric_limits<int>::min()) continue;
-
-        // 到达终点不再扩展（避免重复处理）
-        if (y == endPoint.second && x == endPoint.first) continue;
-
-        // 探索四个方向的移动
-        for (int dir = 0; dir < 4; ++dir) {
-            int newX = x + dirX[dir];  // 新x坐标
-            int newY = y + dirY[dir];  // 新y坐标
-
-            // 边界与障碍物检查：确保新坐标在网格内且不是墙壁（'#'）
-            if (newX < 0 || newX >= gridSize || newY < 0 || newY >= gridSize || grid[newY][newX] == '#') {
-                continue;
+            // 如果找到终点，直接返回
+            if (x == exitX && y == exitY) {
+                finalpath[steps][0] = x;
+                finalpath[steps][1] = y;
+                steps++;
+                break;
             }
+            int t = 0;
+            int ndp2[4] = { 0 };
+            for (const auto& dir : directions) {
 
-            int newState = state;  // 新状态掩码（初始与当前状态相同）
-            int scoreChange = 0;   // 分数变化（收集金币加分，触发陷阱扣分）
-            char cellType = grid[newY][newX];  // 新单元格类型
+                int nx = x + dir[0];
+                int ny = y + dir[1];
 
-            // 处理陷阱：如果是陷阱且未被触发过，更新分数和状态
-             if (cellType == 'T') {
-                auto it = trapIndexMap.find({ newX, newY });  // 查找陷阱索引
-                if (it != trapIndexMap.end()) {  // 找到陷阱
-                    int trapIdx = it->second;  // 获取陷阱索引
-                    int trapBit = coinCount + trapIdx;  // 陷阱在掩码中的位置（金币之后）
-                    if (!(state & (1 << trapBit))) {  // 检查是否已触发（对应位是否为0）
-                        scoreChange += TRAP_DEDUCTION;  // 扣分
-                        newState |= (1 << trapBit);  // 更新状态掩码（对应位置1）
+                if (!isValid(nx, ny))continue;
+
+                ndp2[t++] = dp2[nx][ny];
+            }
+            std::sort(ndp2, ndp2 + 4);
+            // 探索四个方向
+            for (const auto& dir : directions) {
+                int nx = x + dir[0];
+                int ny = y + dir[1];
+                if (!isValid(nx, ny))continue;
+                if (dp2[nx][ny] <= 0) continue;
+                if (parent[x][y].first == nx && parent[x][y].second == ny && !isfq(x, y)) continue;
+                if (dp2[nx][ny] == ndp2[3])
+                {
+                    if (1) {
+                        finalpath[steps][0] = x;
+                        finalpath[steps][1] = y;
+                        steps++;
+                        path[nx][ny] = path[x][y];
+                        path[nx][ny].push_back({ nx, ny });
+                        parent[nx][ny] = { x, y };
+                        // 减少目标点的可用次数
+                        dp2[nx][ny]--;
+                        pq.push({ dp2[nx][ny], {nx, ny} });
                     }
+                    break;
                 }
             }
-            // 处理金币：如果是金币且未被收集过，更新分数和状态
-             else if (cellType == 'G') {
-                auto it = coinIndexMap.find({ newX, newY });  // 查找金币索引
-                if (it != coinIndexMap.end()) {  // 找到金币
-                    int coinIdx = it->second;  // 获取金币索引
-                    if (!(state & (1 << coinIdx))) {  // 检查是否已收集（对应位是否为0）
-                        scoreChange += COIN_SCORE;  // 加分
-                        newState |= (1 << coinIdx);  // 更新状态掩码（对应位置1）
-                    }
-                }
-            }
-            
-
-            // 计算新状态的分数和距离
-            int updatedScore = currentState.score + scoreChange;  // 新分数 = 当前分数 + 变化量
-            int updatedDist = currentState.distance + 1;  // 新距离 = 当前距离 + 1（移动一步）
-
-            // 更新DP状态：检查是否需要更新新状态的信息
-            auto& nextState = dp[newY][newX][newState];
-            bool needUpdate = false;  // 是否需要更新标志
-
-            // 规则：优先选择分数高的状态；分数相同则选择距离短的状态
-            if (updatedScore > nextState.score) {
-                needUpdate = true;
-            }
-            else if (updatedScore == nextState.score && updatedDist < nextState.distance) {
-                needUpdate = true;
-            }
-
-            // 如果需要更新，则更新状态信息并记录路径，将新状态加入队列
-            if (needUpdate) {
-                nextState = StateInfo(updatedScore, updatedDist);  // 更新状态
-                prevPositions[newY][newX][newState] = { x, y };  // 记录前一步坐标
-                prevMasks[newY][newX][newState] = state;  // 记录前一步状态
-                processingQueue.push({ newY, newX, newState });  // 加入队列待处理
-            }
         }
-    }
 
-    // 查找最优终点状态：遍历终点所有可能的状态，选择分数最高且距离最短的
-    highestScore = std::numeric_limits<int>::min();  // 初始化最高分数为最小值
-    shortestDistance = std::numeric_limits<int>::max();  // 初始化最短距离为最大值
-    int bestState = -1;  // 最优状态掩码
+        // 检查终点是否可达
+        if (path[exitX][exitY].empty()) {
+            cout << "无法找到到达终点的路径" << endl;
 
-    for (int state = 0; state < maxState; ++state) {
-        const auto& endState = dp[endPoint.second][endPoint.first][state];  // 终点在该状态下的信息
-        // 比较并更新最优状态
-        if (endState.score > highestScore ||
-            (endState.score == highestScore && endState.distance < shortestDistance)) {
-            highestScore = endState.score;
-            shortestDistance = endState.distance;
-            bestState = state;
+            // 恢复原始dp2数组
+            dp2 = originalDp2;
+            return false;
         }
-    }
 
-    // 重建路径并可视化：如果找到有效路径
-    if (bestState != -1) {
-        bestPath.clear();  // 清空现有路径
-        std::pair<int, int> currentPos = endPoint;  // 从终点开始回溯
-        int currentState = bestState;  // 最优状态
+        // 恢复原始dp2数组
+        dp2 = originalDp2;
 
-        // 回溯构建路径：从终点一直追溯到起点（父坐标为(-1,-1)时
-                // 回溯构建路径：从终点一直追溯到起点（父坐标为(-1,-1)时结束）
-        while (currentPos.first != -1) {
-            bestPath.push_back(currentPos);  // 将当前位置加入路径
-            // 获取前一步的坐标和状态
-            auto prevPos = prevPositions[currentPos.second][currentPos.first][currentState];
-            int prevState = prevMasks[currentPos.second][currentPos.first][currentState];
-            currentPos = prevPos;  // 更新当前位置为前一步位置
-            currentState = prevState;  // 更新当前状态为前一步状态
-        }
-        std::reverse(bestPath.begin(), bestPath.end());  // 反转路径，使其从起点到终点
+        // 输出基于dp2值最大的路径
+        cout << "基于dp2值最大优先的路径:" << endl;
+        for (size_t i = 0; i < steps; i++) {
+            system("cls");
+            cout << "步骤 " << setw(4) << left << i << ": (" << finalpath[i][0] << ", " << finalpath[i][1] << ")  " << endl;
 
-        // 路径可视化输出：逐帧显示路径
-        std::vector<std::pair<int, int>> pathToShow = bestPath;  // 复制最优路径用于显示
-        for (size_t i = 0; i < pathToShow.size(); ++i) {
-            system("cls");  // 清屏（Windows系统，Linux/macOS需改为"clear"）
-            std::cout << "步骤 " << std::setw(4) << std::left << i << ": ("
-                << pathToShow[i].first << ", " << pathToShow[i].second << ")  " << std::endl;
-
-            // 绘制迷宫：根据当前步骤渲染迷宫状态
-            for (int j = 0; j < gridSize; ++j) {
-                for (int k = 0; k < gridSize; ++k) {
-                    // 当前位置标记：用绿色&表示当前位置
-                    if (pathToShow[i].first == k && pathToShow[i].second == j) {
-                        std::cout << COLOR_GREEN << "&" << COLOR_RESET;
-                        grid[j][k] = ' ';  // 移动后将原位置标记为空格（避免重复显示）
+            // 显示迷宫状态
+            for (int j = 0; j < maze.size; ++j) {
+                for (int k = 0; k < maze.size; ++k) {
+                    if (finalpath[i][0] == j && finalpath[i][1] == k) {
+                        cout << ANSI_COLOR_GREEN << "&" << ANSI_COLOR_RESET;
+                        maze.grid[j][k] = ' ';
                     }
-                    // 墙壁：用蓝色#表示
-                    else if (grid[j][k] == '#') {
-                        std::cout << COLOR_BLUE << grid[j][k] << COLOR_RESET;
+                    else if (maze.grid[j][k] == '#') {
+                        cout << ANSI_COLOR_BLUE << maze.grid[j][k] << ANSI_COLOR_RESET;
                     }
-                    // 陷阱：用红色T表示
-                    else if (grid[j][k] == 'T') {
-                        std::cout << COLOR_RED << grid[j][k] << COLOR_RESET;
+                    else if (maze.grid[j][k] == 'T') {
+                        cout << ANSI_COLOR_RED << maze.grid[j][k] << ANSI_COLOR_RESET;
                     }
-                    // 资源点：用黄色表示（金币G、可能的其他资源L/B）
-                    else if (grid[j][k] == 'G' || grid[j][k] == 'L' || grid[j][k] == 'B') {
-                        std::cout << COLOR_YELLOW << grid[j][k] << COLOR_RESET;
+                    else if (maze.grid[j][k] == 'G' || maze.grid[j][k] == 'L' || maze.grid[j][k] == 'B') {
+                        cout << ANSI_COLOR_YELLOW << maze.grid[j][k] << ANSI_COLOR_RESET;
                     }
                     else {
-                        std::cout << grid[j][k];  // 普通空地直接显示
+                        cout << maze.grid[j][k];
                     }
                 }
-                std::cout << std::endl;  // 换行
+                cout << endl;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(400)); // 延迟300毫秒，控制显示速度
+            this_thread::sleep_for(chrono::milliseconds(300));
         }
+
+        // 文本形式输出完整路径
+        cout << "\n完整路径:" << endl;
+        for (size_t i = 0; i < steps; i++) {
+            cout << "步骤 " << setw(4) << left << i << ": (" << finalpath[i][0] << ", " << finalpath[i][1] << ")  ";
+            if ((i + 1) % 6 == 0) cout << endl;
+        }
+        return true;
     }
-}
-
-// 获取最高得分
-int MazePathFinder::getHighestScore() const {
-    return highestScore;
-}
-
-// 获取最短距离（加1是因为路径长度=步数+1，即格子数）
-int MazePathFinder::getShortestDistance() const {
-    return shortestDistance + 1;
-}
-
-// 获取最优路径（返回路径坐标列表）
-const std::vector<std::pair<int, int>>& MazePathFinder::getBestPath() const {
-    return bestPath;
-}
-
-// 显示路径详情：输出路径长度和最高分数
-void MazePathFinder::displayPath() const {
-    if (bestPath.empty()) {  // 检查是否存在有效路径
-        std::cout << "未找到有效路径或无法显示路径。" << std::endl;
-        return;
-    }
-    // 输出路径长度和最高分数
-    std::cout << "\n路径总长度: " << bestPath.size() << " 格 | 最高分数: " << getHighestScore() << std::endl;
-}
+};

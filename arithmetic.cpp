@@ -1,15 +1,65 @@
 ﻿#include <iostream>
+#include <cstring>
+#include"route_planning.h"
 #include"maze.h"
 #include"resource_collecting.h"
 #include "puzzle_solving.h"
-#include "boss_bettle.h"
+#include"boss_bettle.h"
 #include <nlohmann/json.hpp>
 using namespace std;
 using json = nlohmann::json;
+
+Maze generateFixedMaze() {
+    Maze maze;
+    maze.size = 15;
+    maze.startX = 3;
+    maze.startY = 14;
+    maze.exitX = 14;
+    maze.exitY = 13;
+
+    // 定义10×10固定迷宫布局（四周为墙，中间设计复杂通路）
+    const char* layout[20] = {
+        "###############",
+        "#GT TG#GT   # #",
+        "### ##### # # #",
+        "# # # #G# # #BS",
+        "# # # #T# # # #",
+        "#        T#  L#",
+        "# # ######### #",
+        "# #   # #TT   #",
+        "# #####G### # #",
+        "#T   G#     # #",
+        "#############T#",
+        "#T#       # TT#",
+        "#G# #T# # # # #",
+        "#   #G# #G  # #",
+        "#############E#"
+    };
+
+    // 安全复制迷宫布局到maze.grid
+    for (int i = 0; i < maze.size; ++i) {
+        snprintf(maze.grid[i], sizeof(maze.grid[i]), "%s", layout[i]);
+    }
+
+    // 输出迷宫布局用于测试
+    std::cout << "n×n固定测试迷宫布局：" << std::endl;
+    for (int i = 0; i < maze.size; ++i) {
+        std::cout << maze.grid[i] << std::endl;
+    }
+
+    return maze;
+}
 int main() {
     int n;
     cout << "请输入迷宫的尺寸（建议为奇数，最小为7）: ";
+    Maze maze = generateFixedMaze();
+    ResourcePathPlanner planner(maze);
+    if (planner.solveWithPruning()) {
 
+    }
+    else {
+        std::cout << "无法找到从起点到终点的有效路径" << std::endl;
+    }
     //string mazeFilePath = R"(C:\Users\张喆\Desktop\maze_15_15_2.csv)";
 
     //MazePathFinder planner(mazeFilePath);
