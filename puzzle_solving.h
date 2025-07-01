@@ -282,8 +282,7 @@ bool backtrack(std::vector<int>& combination,
     return false;
 }
 
-// 主函数：使用回溯法猜测密码
-void guessPassword(const std::vector<std::vector<int>>& clues, int& resources, const std::string& targetHash) {
+int  decryptguessCount(const std::vector<std::vector<int>>& clues, int& resources, const std::string& targetHash) {
     std::vector<int> combination;
     bool found = false;
 
@@ -293,4 +292,5 @@ void guessPassword(const std::vector<std::vector<int>>& clues, int& resources, c
     if (!found) {
         std::cout << "没有更多可能的密码组合了！" << std::endl;
     }
+    return 1001 - resources;
 }

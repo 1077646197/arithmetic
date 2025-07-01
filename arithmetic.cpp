@@ -3,9 +3,9 @@
 #include"resource_collecting.h"
 #include "puzzle_solving.h"
 #include "boss_bettle.h"
-
+#include <nlohmann/json.hpp>
 using namespace std;
-
+using json = nlohmann::json;
 int main() {
     int n;
     cout << "请输入迷宫的尺寸（建议为奇数，最小为7）: ";
@@ -30,16 +30,42 @@ int main() {
    // 
    // 
     //// 示例：设置目标哈希值（实际使用时应从安全存储中获取）
-   std::string targetHash = "0902e62b2d2d441abab9984e314067c0ce74bd5589f2603d2b47eb40c4498b74";
+   //std::string targetHash = "0902e62b2d2d441abab9984e314067c0ce74bd5589f2603d2b47eb40c4498b74";
 
-    //// 示例线索
-   std::vector<std::vector<int>> clues = { { 1,1 },{-1,2,-1} };
+   // //// 示例线索
+   //std::vector<std::vector<int>> clues = { { 1,1 },{-1,2,-1} };
 
-    //// 初始资源数量(替换为玩家资源)
-    int resources = 1000;
+   // //// 初始资源数量(替换为玩家资源)
+   // 
 
-    //// 开始回溯猜测密码
-    guessPassword(clues, resources, targetHash);
+   // //// 开始回溯猜测密码
+   // guessPassword(clues, resources, targetHash);
+    std::string directory = "C:\\Users\\张喆\\Desktop\\password测试集\\password_test\\";
+    int allguessCount = 0;
+    for (int i = 0; i < 100; ++i)
+    {
+        int resources = 1000;
+        // 生成文件名（包括完整路径）
+        std::string filename = directory + "pwd_";
+        if (i < 10) {
+            filename += "00";
+        }
+        else if (i < 100) {
+            filename += "0";
+        }
+        filename += std::to_string(i);
+        filename += ".json";
+        std::ifstream file(filename);
+        json data;
+        file >> data;
+        std::string targetHash = data["L"];
+        std::vector<std::vector<int>> clues = data["C"];
+        PasswordLock lock;
+        allguessCount += decryptguessCount(clues, resources, targetHash);
+        std::cout << "第" << i + 1 << "个" << "猜测次数为" << decryptguessCount(clues, resources, targetHash) << std::endl;
+    }
+    std::cout << "100个文件总猜测次数为" << allguessCount << std::endl;
+
 
         vector<int> bossHP = { 13, 13, 20 };
         vector<vector<int>> skills = {
