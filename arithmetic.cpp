@@ -50,8 +50,6 @@ Maze generateFixedMaze() {
     return maze;
 }
 int main() {
-    int n;
-    cout << "请输入迷宫的尺寸（建议为奇数，最小为7）: ";
     Maze maze = generateFixedMaze();
     ResourcePathPlanner planner(maze);
     if (planner.solveWithPruning()) {
