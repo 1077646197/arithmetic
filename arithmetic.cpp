@@ -61,8 +61,8 @@ int main() {
         std::string targetHash = data["L"];
         std::vector<std::vector<int>> clues = data["C"];
         PasswordLock lock;
-        allguessCount += decryptguessCount(clues, resources, targetHash);
-        std::cout << "第" << i + 1 << "个" << "猜测次数为" << decryptguessCount(clues, resources, targetHash) << std::endl;
+        allguessCount += guessPassword(clues, resources, targetHash);
+        std::cout << "第" << i + 1 << "个" << "猜测次数为" << guessPassword(clues, resources, targetHash) << std::endl;
     }
     std::cout << "100个文件总猜测次数为" << allguessCount << std::endl;
 

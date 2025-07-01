@@ -282,7 +282,7 @@ bool backtrack(std::vector<int>& combination,
     return false;
 }
 
-int  decryptguessCount(const std::vector<std::vector<int>>& clues, int& resources, const std::string& targetHash) {
+int  guessPassword(const std::vector<std::vector<int>>& clues, int& resources, const std::string& targetHash) {
     std::vector<int> combination;
     bool found = false;
 
