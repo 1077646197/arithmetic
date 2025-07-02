@@ -442,7 +442,7 @@ public:
                 int ny = y + dir[1];
 
                 if (!isValid(nx, ny))continue;
-
+                if (parent[x][y].first == nx && parent[x][y].second == ny && !isfq(x, y)) continue;
                 ndp2[t++] = dp2[nx][ny];
             }
             std::sort(ndp2, ndp2 + 4);
