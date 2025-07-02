@@ -1,498 +1,392 @@
 #pragma once
 #include <iostream>
 #include <vector>
-#include <random>
-#include <fstream>
-#include <string>
+#include <stack>
+#include <utility>
 #include <algorithm>
-#include <queue>
-#include <unordered_map>
 #include <cmath>
-#include "maze.h"
+#include <map>
+#include <iomanip>         // 输入输出格式控制
+#include <thread>          // 线程支持
+#include <chrono>          // 时间测量
+
+// ANSI颜色宏定义，用于在支持的终端中显示彩色输出
+#define COLOR_RESET "\033[0m"      // 重置颜色
+#define COLOR_GREEN "\033[32m"    // 路径标记颜色
+#define COLOR_BLUE "\033[34m"     // 墙壁颜色
+#define COLOR_RED "\033[31m"      // 陷阱颜色
+#define COLOR_YELLOW "\033[33m"   // 金币等资源颜色
+#define COLOR_CYAN "\033[36m"     // 起点颜色
+#define COLOR_MAGENTA "\033[35m"  // 终点颜色
+
+using namespace std;
+
+// 方向常量
+const int dx[4] = { -1, 1, 0, 0 };
+const int dy[4] = { 0, 0, -1, 1 };
+const string dirStr[4] = { "UP", "DOWN", "LEFT", "RIGHT" };
+
+// 资源价值定义
+const map<char, int> RESOURCE_VALUES = {
+    {'G', 5},   // 金币
+    {'T', -3},  // 陷阱
+    {'B', 80},   // BOSS
+    {'L', 0}    // 机关
+};
+
+class MAZE {
+public:
+    int rows, cols;
+    vector<vector<char>> grid;
+    pair<int, int> start, end;
+
+    MAZE(int r, int c) : rows(r), cols(c), grid(r, vector<char>(c)) {}
+
+    bool isValid(int x, int y) {
+        return x >= 0 && x < rows && y >= 0 && y < cols;
+    }
+
+    bool isWall(int x, int y) {
+        return isValid(x, y) && grid[x][y] == '#';
+    }
+
+    bool isResource(char c) {
+        return RESOURCE_VALUES.find(c) != RESOURCE_VALUES.end();
+    }
+
+    int getResourceValue(char c) {
+        auto it = RESOURCE_VALUES.find(c);
+        return it != RESOURCE_VALUES.end() ? it->second : 0;
+    }
+
+    bool isEndpoint(int x, int y) {
+        return isValid(x, y) && grid[x][y] == 'E';
+    }
+
+    bool isPath(int x, int y) {
+        return isValid(x, y) && (grid[x][y] == '.' || grid[x][y] == 'R' ||
+            grid[x][y] == 'S' || RESOURCE_VALUES.find(grid[x][y]) != RESOURCE_VALUES.end());
+    }
+};
 
 class Player {
-private:
-    int row, col;         // 玩家当前位置
-    int score;            // 玩家分数
-
 public:
-    // 初始化玩家
-    Player(int startRow, int startCol) : row(startRow), col(startCol), score(0) {}
+    MAZE* maze;
+    MAZE* mazecopy2;
+    int x, y;  // 当前位置
+    int resources;
+    vector<vector<bool>> visited;
+    vector<vector<bool>> resourceTaken;
+    stack<pair<int, int>> path;  // 路径回溯栈
+    vector<pair<int, int>> moves; // 记录移动路径
 
-    // 获取玩家位置
-    pair<int, int> getPosition() const {
-        return { row, col };
+    Player(MAZE* m) : maze(m), mazecopy2(m), resources(1000) {
+        // 初始化访问数组
+        visited.resize(maze->rows, vector<bool>(maze->cols, false));
+        resourceTaken.resize(maze->rows, vector<bool>(maze->cols, false));
+
+        // 设置起点
+        x = maze->start.first;
+        y = maze->start.second;
+        visited[x][y] = true;
+        path.push({ x, y });
+        moves.push_back({ x, y });
+
+        // 如果起点有资源则拾取
+        takeResource();
     }
 
-    // 更新玩家位置
-    void setPosition(int newRow, int newCol) {
-        row = newRow;
-        col = newCol;
+    // 获取曼哈顿距离
+    int manhattanDistance(int x1, int y1, int x2, int y2) {
+        return abs(x1 - x2) + abs(y1 - y2);
     }
 
-    // 获取玩家分数
-    int getScore() const {
-        return score;
-    }
-
-    // 更新玩家分数
-    void updateScore(int delta) {
-        score += delta;
-    }
-};
-
-// 资源信息结构体
-struct Resource {
-    int row, col;         // 资源位置
-    char type;            // 资源类型 'G'(金币), 'T'(陷阱)
-    int value;            // 资源价值
-    int distance;         // 到玩家的距离
-    double costPerformance; // 性价比(单位距离收益)
-
-    Resource(int r, int c, char t, int val) : row(r), col(c), type(t), value(val),
-        distance(0), costPerformance(0.0) {}
-};
-
-// 路径节点结构体，用于BFS寻路
-struct PathNode {
-    int row, col;         // 节点位置
-    int distance;         // 从起点到当前节点的距离
-    PathNode* parent;     // 父节点，用于重建路径
-
-    PathNode(int r, int c, int d, PathNode* p) : row(r), col(c), distance(d), parent(p) {}
-};
-
-// 资源拾取策略类，实现贪心算法
-class ResourcePickingStrategy {
-private:
-    vector<vector<char>> mazeCopy; // 存储迷宫副本,记录资源被拾取后的状态变化
-    int mazeSize;                    // 迷宫大小，行数/列数
-    vector<pair<int, int>> visitedPositions; // 记录已访问的位置，用于检测循环。
-    int loopThreshold;               // 循环检测阈值，当最近访问的位置重复次数超过阈值的一半时认为陷入循环。
-
-    // 四个方向的移动向量
-    const int dirs[4][2] = { {-1, 0}, {0, 1}, {1, 0}, {0, -1} };
-
-public:
-    ResourcePickingStrategy(vector<vector<char>> m) : mazeCopy(m), mazeSize(m.size()) {
-        loopThreshold = mazeSize * 2; // 设置循环检测阈值
-    }
-
-    // 在迷宫上绘制路径并输出
-    void displayMazeWithPath(const vector<pair<int, int>>& path) {
-        // 创建迷宫副本用于绘制路径
-        vector<vector<char>> mazeWithPath = mazeCopy;
-
-
-        // 在路径上绘制标记（使用*表示路径）
-        for (size_t i = 0; i < path.size(); i++) {
-            int row = path[i].first;
-            int col = path[i].second;
-
-            // 确保位置有效
-            if (row >= 0 && row < mazeSize && col >= 0 && col < mazeSize) {
-                // 起点用S标记，终点用E标记，中间路径用*标记
-                if (i == 0) {
-                    mazeWithPath[row][col] = 'S'; // 起点
-                }
-                else if (i == path.size() - 1) {
-                    mazeWithPath[row][col] = 'N'; // 终点
-                }
-                else {
-                    mazeWithPath[row][col] = '*'; // 路径
+    // 获取3x3视野内的资源信息
+    vector<tuple<int, int, char, double>> getResourcesInSight() {
+        vector<tuple<int, int, char, double>> resources;
+        for (int i = max(0, x - 1); i <= min(maze->rows - 1, x + 1); i++) {
+            for (int j = max(0, y - 1); j <= min(maze->cols - 1, y + 1); j++) {
+                char cell = maze->grid[i][j];
+                if (maze->isResource(cell) && !resourceTaken[i][j]) {
+                    int distance = manhattanDistance(x, y, i, j);
+                    double valuePerDistance = (distance > 0) ?
+                        static_cast<double>(maze->getResourceValue(cell)) / distance :
+                        maze->getResourceValue(cell);
+                    resources.emplace_back(i, j, cell, valuePerDistance);
                 }
             }
         }
-
-        // 输出带有路径的迷宫
-        cout << "\n=== 路径可视化 (" << path.size() << "步) ===" << endl;
-        for (int i = 0; i < mazeSize; i++) {
-            for (int j = 0; j < mazeSize; j++) {
-                cout << mazeWithPath[i][j];
-            }
-            cout << endl;
-        }
-        cout << "=====================" << endl;
+        return resources;
     }
 
-    // 执行贪心策略
-    vector<pair<int, int>> executeGreedyStrategy(Player& player) {
-        vector<pair<int, int>> path; // 存储拾取路径
-        path.push_back(player.getPosition()); // 添加起点
-        int stepCount = 0;
-        const int MAX_STEPS = mazeSize * mazeSize * 2; // 添加最大步数限制
-        visitedPositions.clear(); // 清空访问记录
+    // 拾取当前资源
+    void takeResource() {
+        char cell = maze->grid[x][y];
+        if (maze->isResource(cell) && !resourceTaken[x][y]) {
+            int value = maze->getResourceValue(cell);
+            resources += value;
+            resourceTaken[x][y] = true;
 
-        while (stepCount++ < MAX_STEPS) {
-            // 检查是否到达终点'E'
-            auto [playerRow, playerCol] = player.getPosition();
-            if (mazeCopy[playerRow][playerCol] == 'E') {
-                cout << "到达终点'E'，终止探索进程！" << endl;
+            string resourceName;
+            if (cell == 'G') resourceName = "金币";
+            else if (cell == 'T') resourceName = "陷阱";
+            else if (cell == 'B') resourceName = "BOSS";
+            else if (cell == 'L') resourceName = "机关";
+
+            cout << "拾取" << resourceName << "在(" << x << ", " << y << ")。";
+            cout << "价值: " << value << "，当前资源: " << resources << endl;
+        }
+    }
+
+    // 获取所有可通行邻居
+    vector<pair<int, int>> getAllNeighbors() {
+        vector<pair<int, int>> neighbors;
+        for (int i = 0; i < 4; i++) {
+            int nx = x + dx[i];
+            int ny = y + dy[i];
+            if (maze->isValid(nx, ny) && !maze->isWall(nx, ny)) {
+                neighbors.push_back({ nx, ny });
+            }
+        }
+        return neighbors;
+    }
+
+    // 获取未访问邻居
+    vector<pair<int, int>> getUnvisitedNeighbors() {
+        vector<pair<int, int>> neighbors = getAllNeighbors();
+        vector<pair<int, int>> unvisited;
+        for (auto& p : neighbors) {
+            if (!visited[p.first][p.second]) {
+                unvisited.push_back(p);
+            }
+        }
+        return unvisited;
+    }
+
+    // 移动到新位置
+    void moveTo(int nx, int ny) {
+        // 确定移动方向
+        string direction;
+        for (int i = 0; i < 4; i++) {
+            if (x + dx[i] == nx && y + dy[i] == ny) {
+                direction = dirStr[i];
                 break;
             }
-
-            // 记录当前位置
-            visitedPositions.push_back(player.getPosition());
-
-            // 检测循环
-            if (detectLoop()) {
-                cout << "检测到循环! 尝试脱困..." << endl;
-                pair<int, int> newPos = escapeLoop(player);
-                if (newPos.first == -1) {
-                    cout << "无法脱困，终止策略！" << endl;
-                    break;
-                }
-
-                path.push_back(newPos);
-                player.setPosition(newPos.first, newPos.second);
-                continue;
-            }
-
-            // 获取视野内的资源
-            vector<Resource> visibleResources = getVisibleResources(player);
-            // 修复：检查资源列表是否为空
-            if (visibleResources.empty()) {
-                pair<int, int> newPos = movePlayerDefaultDirection(player);
-                if (newPos.first == -1) {
-                    cout << "所有方向都被阻挡，无法移动！" << endl;
-                    break;
-                }
-
-                path.push_back(newPos);
-                player.setPosition(newPos.first, newPos.second);
-                cout << "视野内无资源，移动至(" << newPos.first << "," << newPos.second << ")" << endl;
-                continue;
-            }
-
-            // 计算性价比并选择最优资源
-            Resource bestResource = selectBestResource(visibleResources);
-
-            // 规划到最优资源的路径
-            vector<pair<int, int>> pathToResource = findPath(player.getPosition(), { bestResource.row, bestResource.col });
-            if (pathToResource.empty()) {
-                cout << "无法到达资源位置，尝试移动..." << endl;
-                pair<int, int> newPos = movePlayerDefaultDirection(player);
-                if (newPos.first == -1) break;
-
-                path.push_back(newPos);
-                player.setPosition(newPos.first, newPos.second);
-                continue;
-            }
-
-            // 更新路径和玩家位置
-            for (size_t i = 1; i < pathToResource.size(); i++) {
-                path.push_back(pathToResource[i]); // 只添加新路径点
-                visitedPositions.push_back(pathToResource[i]); // 记录访问位置
-            }
-            player.setPosition(pathToResource.back().first, pathToResource.back().second);
-
-            // 处理资源拾取前检查是否到达终点
-            if (mazeCopy[player.getPosition().first][player.getPosition().second] == 'E') {
-                cout << "到达终点'E'，终止探索进程！" << endl;
-                break;
-            }
-
-            // 处理资源拾取
-            processResourcePickup(player, bestResource);
         }
 
-        // 显示完整路径（可选：策略执行完毕后显示）
-        if (!path.empty()) {
-            displayMazeWithPath(path);
-            cout << "最终玩家位置: (" << player.getPosition().first << ", "
-                << player.getPosition().second << ")" << endl;
-            cout << "总步数: " << stepCount << endl;
-            cout << "最终分数: " << player.getScore() << endl;
-        }
+        cout << "从(" << x << ", " << y << ")移动到(" << nx << ", " << ny << ") [" << direction << "]" << endl;
 
-        return path;
+        x = nx;
+        y = ny;
+        visited[x][y] = true;
+        path.push({ x, y });
+        moves.push_back({ x, y });
+
+        // 拾取新位置资源
+        takeResource();
     }
 
-private:
+    // 回溯到上一个位置
+    void backtrack() {
+        if (path.empty()) return;
 
-    // 检测是否陷入循环
-    bool detectLoop() {
-        //总路径太短，不视作循环
-        if (visitedPositions.size() < loopThreshold) return false;
+        // 弹出当前位置
+        path.pop();
+        if (path.empty()) return;
 
-        // 检查最近的loopThreshold个位置中是否有重复
-        int recentCount = min(loopThreshold, (int)visitedPositions.size());
-        unordered_map<string, int> posCount;//创建一个哈希表，统计位置出现的次数
+        // 获取上一个位置
+        pair<int, int> prev = path.top();
+        cout << "回溯从(" << x << ", " << y << ")到(" << prev.first << ", " << prev.second << ")" << endl;
 
-        for (int i = visitedPositions.size() - recentCount; i < visitedPositions.size(); i++) {
-            string posKey = to_string(visitedPositions[i].first) + "," + to_string(visitedPositions[i].second);
-            posCount[posKey]++;
+        x = prev.first;
+        y = prev.second;
+        moves.push_back({ x, y });
+    }
 
-            // 如果某个位置出现次数超过阈值的一半，认为陷入循环
-            if (posCount[posKey] > recentCount / 2) {
-                return true;
+    // 贪心策略选择下一个移动
+    bool selectAndMove() {
+        // 获取3x3视野内的资源信息
+        auto resourcesInSight = getResourcesInSight();
+
+        // 如果没有未访问邻居，检查是否在终点
+        vector<pair<int, int>> unvisited = getUnvisitedNeighbors();
+        if (unvisited.empty()) {
+            if (maze->isEndpoint(x, y)) {
+                cout << "到达终点(" << x << ", " << y << ")" << endl;
+                return false;
             }
+            backtrack();
+            return true;
         }
 
-        return false;
-    }
+        // 优先处理视野内的高性价比资源
+        if (!resourcesInSight.empty()) {
+            // 按性价比排序 (降序)
+            sort(resourcesInSight.begin(), resourcesInSight.end(),
+                [](const tuple<int, int, char, double>& a, const tuple<int, int, char, double>& b) {
+                    return get<3>(a) > get<3>(b);
+                });
 
-    // 尝试脱离循环
-    pair<int, int> escapeLoop(const Player& player) {
-        auto [playerRow, playerCol] = player.getPosition();
+            // 选择性价比最高的资源
+            auto bestResource = resourcesInSight[0];
+            int bestX = get<0>(bestResource);
+            int bestY = get<1>(bestResource);
+            char resType = get<2>(bestResource);
+            double valuePerDist = get<3>(bestResource);
 
-        // 尝试寻找未访问过的方向
-        vector<pair<int, int>> possibleMoves;
-
-        // 四个方向的移动向量
-        const int escapeDirs[8][2] = { {-1, 0},  {0, 1}, {1, 0},  {0, -1} };
-
-        for (const auto& dir : escapeDirs) {
-            int newRow = playerRow + dir[0];
-            int newCol = playerCol + dir[1];
-
-            // 检查新位置是否有效且未访问过
-            if (newRow >= 1 && newRow < mazeSize - 1 &&
-                newCol >= 1 && newCol < mazeSize - 1 &&
-                mazeCopy[newRow][newCol] != '#' &&
-                !isPositionVisited({ newRow, newCol })) {
-                possibleMoves.push_back({ newRow, newCol });
-            }
-        }
-
-        // 如果有未访问过的方向，随机选择一个
-        if (!possibleMoves.empty()) {
-            random_device rd;
-            mt19937 gen(rd());
-            uniform_int_distribution<> dis(0, possibleMoves.size() - 1);
-            return possibleMoves[dis(gen)];
-        }
-
-        // 如果没有未访问过的方向，尝试沿墙走
-        return followWall(player);
-    }
-
-    // 检查位置是否已访问
-    bool isPositionVisited(pair<int, int> pos) {
-        for (const auto& visitedPos : visitedPositions) {
-            if (visitedPos == pos) return true;
-        }
-        return false;
-    }
-
-    // 沿墙走算法
-    pair<int, int> followWall(const Player& player) {
-        auto [playerRow, playerCol] = player.getPosition();
-
-        // 尝试找到最近的墙
-        for (int distance = 1; distance <= 3; distance++) {
-            for (int dr = -distance; dr <= distance; dr++) {
-                for (int dc = -distance; dc <= distance; dc++) {
-                    if (abs(dr) + abs(dc) > distance) continue;
-
-                    int row = playerRow + dr;
-                    int col = playerCol + dc;
-
-                    if (row < 0 || row >= mazeSize || col < 0 || col >= mazeSize) continue;
-
-                    if (mazeCopy[row][col] == '#') {
-                        // 找到墙，尝试沿墙走
-                        // 定义顺时针方向的移动顺序
-                        const vector<pair<int, int>> directions = {
-                            {0, 1},   // 右
-                            {1, 0},   // 下   
-                            {0, -1},  // 左
-                            {-1, 0},  // 上
-                        };
-
-                        // 尝试每个方向
-                        for (const auto& dir : directions) {
-                            int newRow = playerRow + dir.first;
-                            int newCol = playerCol + dir.second;
-
-                            if (newRow >= 1 && newRow < mazeSize - 1 &&
-                                newCol >= 1 && newCol < mazeSize - 1 &&
-                                mazeCopy[newRow][newCol] != '#') {
-                                return { newRow, newCol };
-                            }
-                        }
+            // 如果性价比为正或是必须资源，优先移动
+            if (valuePerDist > 0 || resType == 'G') {
+                // 检查是否在未访问邻居中
+                for (auto& p : unvisited) {
+                    if (p.first == bestX && p.second == bestY) {
+                        string resName = (resType == 'G') ? "金币" :
+                            (resType == 'T') ? "陷阱" :
+                            (resType == 'B') ? "BOSS" : "机关";
+                        cout << "发现" << resName << "在(" << bestX << ", " << bestY
+                            << ")，性价比: " << valuePerDist << "，优先移动" << endl;
+                        moveTo(bestX, bestY);
+                        return true;
                     }
                 }
             }
         }
 
-        // 如果找不到墙，尝试默认移动
-        return movePlayerDefaultDirection(player);
-    }
+        // 分离终点和非终点邻居
+        vector<pair<int, int>> nonEndNeighbors;
+        pair<int, int> endNeighbor = { -1, -1 };
 
-    // 新增：默认方向移动方法
-    pair<int, int> movePlayerDefaultDirection(const Player& player) {
-        auto [playerRow, playerCol] = player.getPosition();
-        vector<pair<int, int>> directions = {
-           {0, 1},   // 右
-           {-1, 0},  // 上
-           {0, -1},  // 左
-           {1, 0}    // 下
-        };
-        random_device rd;
-        mt19937 gen(rd());
-        shuffle(directions.begin(), directions.end(), gen);
-
-        // 按照随机顺序尝试每个方向
-        for (const auto& dir : directions) {
-            int newRow = playerRow + dir.first;
-            int newCol = playerCol + dir.second;
-
-            // 检查新位置是否有效（边界内且不是墙壁）
-            if (newRow >= 1 && newRow < mazeSize - 1 &&
-                newCol >= 1 && newCol < mazeSize - 1 &&
-                mazeCopy[newRow][newCol] != '#') {
-                return { newRow, newCol };
+        for (auto& p : unvisited) {
+            if (maze->isEndpoint(p.first, p.second)) {
+                endNeighbor = p;
+            }
+            else {
+                nonEndNeighbors.push_back(p);
             }
         }
 
-        // 所有方向都不可行，返回无效位置
-        return { -1, -1 };
-    }
-
-    // 获取玩家视野内的资源 (3x3区域)
-    vector<Resource> getVisibleResources(const Player& player) {
-        vector<Resource> resources;
-        auto [playerRow, playerCol] = player.getPosition();
-
-        // 定义3x3视野范围
-        int startRow = max(1, playerRow - 1);
-        int endRow = min(mazeSize - 2, playerRow + 1);
-        int startCol = max(1, playerCol - 1);
-        int endCol = min(mazeSize - 2, playerCol + 1);
-
-        // 遍历视野内的所有单元格
-        for (int i = startRow; i <= endRow; i++) {
-            for (int j = startCol; j <= endCol; j++) {
-                if (i == playerRow && j == playerCol) continue; // 跳过玩家位置
-
-                char cell = mazeCopy[i][j];
-                if (cell == ' ' || cell == '#' || cell == 'S' || cell == 'E') continue; // 跳过通路、墙壁、起点和终点
-
-                // 根据资源类型设置价值
-                int value = 0;
-                switch (cell) {
-                case 'G': value = 5; break; // 金币
-                case 'T': value = -3; break; // 陷阱
-                default: value = 0;
-                }
-
-                // 计算到玩家的距离 (曼哈顿距离)
-                int distance = abs(i - playerRow) + abs(j - playerCol);
-
-                // 创建资源对象并添加到列表
-                resources.emplace_back(i, j, cell, value);
-                resources.back().distance = distance;
-                resources.back().costPerformance = static_cast<double>(value) / distance;
-            }
-        }
-
-        return resources;
-    }
-
-    // 选择性价比最高的资源 (贪心策略核心)
-    Resource selectBestResource(const vector<Resource>& resources) {
-        if (resources.empty()) {
-            throw runtime_error("没有可选择的资源");
-        }
-
-        Resource best = resources[0];
-
-        // 遍历资源，找到性价比最高的
-        for (const auto& res : resources) {
-            // 优先选择性价比高的资源
-            if (res.costPerformance > best.costPerformance) {
-                best = res;
-            }
-            // 性价比相同时，选择价值高的
-            else if (res.costPerformance == best.costPerformance && res.value > best.value) {
-                best = res;
-            }
-        }
-
-        return best;
-    }
-
-    // 使用BFS寻找从起点到终点的最短路径
-    vector<pair<int, int>> findPath(pair<int, int> start, pair<int, int> end) {
-        vector<vector<bool>> visited(mazeSize, vector<bool>(mazeSize, false));
-        queue<PathNode*> q;
-
-        // 检查起点和终点是否有效
-        if (mazeCopy[start.first][start.second] == '#' || mazeCopy[end.first][end.second] == '#') {
-            return {};
-        }
-
-        // 创建起点节点并加入队列
-        PathNode* startNode = new PathNode(start.first, start.second, 0, nullptr);
-        q.push(startNode);
-        visited[start.first][start.second] = true;
-
-        // BFS寻路
-        while (!q.empty()) {
-            PathNode* current = q.front();
-            q.pop();
-
-            // 到达终点，重建路径
-            if (current->row == end.first && current->col == end.second) {
-                vector<pair<int, int>> path;
-                while (current) {
-                    path.emplace_back(current->row, current->col);
-                    current = current->parent;
-                }
-                reverse(path.begin(), path.end()); // 反转路径，从起点到终点
-                // 释放内存
-                while (!q.empty()) {
-                    delete q.front();
-                    q.pop();
-                }
-
-                return path;
-            }
-
-            // 探索四个方向
-            for (const auto& dir : dirs) {
-                int newRow = current->row + dir[0];
-                int newCol = current->col + dir[1];
-
-                // 检查新位置是否有效
-                if (newRow >= 1 && newRow < mazeSize - 1 && newCol >= 1 && newCol < mazeSize - 1 &&
-                    !visited[newRow][newCol] && mazeCopy[newRow][newCol] != '#') {
-                    visited[newRow][newCol] = true;
-                    q.push(new PathNode(newRow, newCol, current->distance + 1, current));
+        // 优先选择非终点邻居
+        if (!nonEndNeighbors.empty()) {
+            // 尝试选择有资源的邻居
+            for (auto& p : nonEndNeighbors) {
+                if (maze->isResource(maze->grid[p.first][p.second])) {
+                    moveTo(p.first, p.second);
+                    return true;
                 }
             }
+            // 没有资源邻居，选择第一个非终点邻居
+            moveTo(nonEndNeighbors[0].first, nonEndNeighbors[0].second);
+            return true;
+        }
+        // 只有终点邻居
+        else if (endNeighbor.first != -1) {
+            moveTo(endNeighbor.first, endNeighbor.second);
+            cout << "到达终点(" << x << ", " << y << ")" << endl;
+            return false;
         }
 
-        // 无法找到路径，释放内存
-        while (!q.empty()) {
-            delete q.front();
-            q.pop();
-        }
-
-        return {};
+        // 需要回溯
+        backtrack();
+        return true;
     }
 
-    // 添加资源后处理逻辑
-    void processResourcePickup(Player& player, const Resource& resource) {
-        player.updateScore(resource.value);
+    // 运行直到到达终点
+    void runUntilEnd() {
+        while (selectAndMove()) {
+            // 继续执行
+        }
+    }
 
-        // 更新迷宫状态（拾取后变为通路）
-        mazeCopy[resource.row][resource.col] = ' ';
+    // 打印最终结果
+    void printResults() {
 
-        // 添加资源拾取反馈
-        string resourceName;
-        switch (resource.type) {
-        case 'G': resourceName = "金币"; break;
-        case 'T': resourceName = "陷阱"; break;
-        case 'L': resourceName = "机关"; break;
-        case 'B': resourceName = "BOSS"; break;
-        default: resourceName = "未知资源";
+
+        // 动态显示路径探索过程
+        cout << "\n=== 开始路径可视化 ===" << endl;
+        for (size_t step = 0; step < moves.size(); step++) {
+            // 根据操作系统清屏（Windows使用cls，其他系统使用clear）
+#ifdef _WIN32
+            system("cls");
+#else
+            system("clear");
+#endif
+
+            // 显示当前步骤信息
+            cout << "步骤 " << setw(3) << step + 1 << "/" << moves.size()
+                << " | 位置: (" << moves[step].first << ", " << moves[step].second << ")"
+                << " | 分数: " << resources << endl;
+            cout << "------------------------" << endl;
+
+            // 绘制当前步骤的迷宫状态
+            for (int i = 0; i < mazecopy2->rows; i++) {
+                for (int j = 0; j < mazecopy2->cols; j++) {
+                    char cell = mazecopy2->grid[i][j];
+                    pair<int, int> pos = { i, j };
+
+                    // 当前玩家位置
+                    if (pos == moves[step]) {
+                        cout << COLOR_GREEN << "&" << COLOR_RESET;
+                        mazecopy2->grid[i][j] = ' ';
+                    }
+                    // 起点位置
+                    else if (pos == moves[0]) {
+                        cout << COLOR_CYAN << "S" << COLOR_RESET;
+                    }
+                    // 终点位置
+                    else if (pos == maze->end) {
+                        cout << COLOR_MAGENTA << "E" << COLOR_RESET;
+                    }
+                    // 墙壁
+                    else if (cell == '#') {
+                        cout << COLOR_BLUE << "#" << COLOR_RESET;
+                    }
+                    // 陷阱
+                    else if (cell == 'T') {
+                        cout << COLOR_RED << "T" << COLOR_RESET;
+                    }
+                    // 金币
+                    else if (cell == 'G') {
+                        cout << COLOR_YELLOW << "G" << COLOR_RESET;
+                    }
+                    // BOSS
+                    else if (cell == 'B') {
+                        cout << COLOR_YELLOW << "B" << COLOR_RESET;
+                    }
+                    // 机关
+                    else if (cell == 'L') {
+                        cout << COLOR_YELLOW << "L" << COLOR_RESET;
+                    }
+                    // 普通通路
+                    else if (cell == '.' || cell == ' ') {
+                        // 检查是否访问过
+                        if (visited[i][j]) {
+                            cout << COLOR_GREEN << "." << COLOR_RESET;
+                        }
+                        else {
+                            cout << " ";
+                        }
+                    }
+                    // 其他情况
+                    else {
+                        cout << cell;
+                    }
+                }
+                cout << endl;
+            }
+
+            // 显示路径统计信息
+            cout << "------------------------" << endl;
+            cout << "已探索步数: " << step + 1 << "/" << moves.size() << endl;
+
+            // 控制动画速度，延迟300毫秒
+            this_thread::sleep_for(chrono::milliseconds(300));
         }
 
-        cout << "拾取[" << resourceName << "] "
-            << (resource.value >= 0 ? "+" : "") << resource.value << "分! "
-            << "当前位置: (" << resource.row << "," << resource.col << ")"
-            << endl;
+        // 显示最终路径总结
+        cout << "\n=== 路径可视化完成 ===" << endl;
+        cout << "总路径长度: " << moves.size() << " 步" << endl;
+        cout << "最终分数: " << resources << endl;
+        cout << "=====================" << endl;
+
+
     }
 };

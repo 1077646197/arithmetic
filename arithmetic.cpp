@@ -9,7 +9,7 @@
 #include "puzzle_solving.h"
 #include "boss_bettle.h"
 #include <nlohmann/json.hpp>
-
+#include "greed.h"
 using namespace std;
 using json = nlohmann::json;
 
@@ -71,17 +71,38 @@ Maze generateMazeFromJson(const std::string& filePath) {
     return maze;
 }
 
+
 int main() {
     std::string mazeFilePath = R"(C:\Users\张喆\Desktop\arithmetic\maze_15_15.json)";
     Maze maze = generateMazeFromJson(mazeFilePath);
+    MAZE maze01(15,15);
+    maze01.rows = 15;
+    maze01.cols = 15;
+    for (int i = 0; i < maze.size; i++)
+    {
+        for (int j = 0; j < maze.size; j++)
+        {
+            maze01.grid[i][j] = maze.grid[i][j];
+        }
+    }
+    maze01.start = make_pair(maze.startX, maze.startY); 
+    maze01.end = make_pair(maze.exitX, maze.exitY);
+
 
     ResourcePathPlanner planner(maze);
     if (planner.solveWithPruning()) {
         // You can add code here to handle the successful path finding
+        this_thread::sleep_for(chrono::milliseconds(2000));
     }
     else {
         std::cout << "无法找到从起点到终点的有效路径" << std::endl;
     }
+    
+
+    Player player(&maze01);
+    player.runUntilEnd();
+    player.printResults();
+
 
     // 从JSON文件中读取密码破解数据
     std::ifstream mazeFile(mazeFilePath);
