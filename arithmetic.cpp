@@ -1,143 +1,114 @@
 ﻿#include <iostream>
+#include <fstream>
 #include <cstring>
-#include"route_planning.h"
-#include"maze.h"
-#include"resource_collecting.h"
+#include <vector>
+#include <string>
+#include "route_planning.h"
+#include "maze.h"
+#include "resource_collecting.h"
 #include "puzzle_solving.h"
-#include"boss_bettle.h"
+#include "boss_bettle.h"
 #include <nlohmann/json.hpp>
+
 using namespace std;
 using json = nlohmann::json;
 
-Maze generateFixedMaze() {
+Maze generateMazeFromJson(const std::string& filePath) {
+    std::ifstream file(filePath);
+    json data;
+    file >> data;
+
     Maze maze;
     maze.size = 15;
-    maze.startX = 3;
-    maze.startY = 14;
-    maze.exitX = 14;
-    maze.exitY = 13;
+    maze.startX = -1;
+    maze.startY = -1;
+    maze.exitX = -1;
+    maze.exitY = -1;
 
-    // 定义10×10固定迷宫布局（四周为墙，中间设计复杂通路）
-    const char* layout[20] = {
-        "###############",
-        "#GT TG#GT   # #",
-        "### ##### # # #",
-        "# # # #G# # #BS",
-        "# # # #T# # # #",
-        "#        T#  L#",
-        "# # ######### #",
-        "# #   # #TT   #",
-        "# #####G### # #",
-        "#T   G#     # #",
-        "#############T#",
-        "#T#       # TT#",
-        "#G# #T# # # # #",
-        "#   #G# #G  # #",
-        "#############E#"
-    };
+    // 解析迷宫：每行是一个数组
+    for (int y = 0; y < maze.size; ++y) {
+        for (int x = 0; x < maze.size; ++x) {
+            if (x >= data["maze"][y].size()) {
+                std::cerr << "Error: 迷宫行 " << y << " 长度不足！" << std::endl;
+                exit(1);
+            }
+            std::string cell = data["maze"][y][x].get<std::string>();
+            if (cell.size() != 1) {
+                std::cerr << "Error: 迷宫单元格 (" << x << "," << y << ") 包含多个字符！" << std::endl;
+                exit(1);
+            }
+            maze.grid[y][x] = cell[0];
 
-    // 安全复制迷宫布局到maze.grid
-    for (int i = 0; i < maze.size; ++i) {
-        snprintf(maze.grid[i], sizeof(maze.grid[i]), "%s", layout[i]);
+            // 记录起点和终点
+            if (cell[0] == 'S') {
+                maze.startX = y;
+                maze.startY = x;
+                cout << maze.startX <<" " << maze.startY;
+                cout << endl;
+            }
+            else if (cell[0] == 'E') {
+                maze.exitX = y;
+                maze.exitY = x;
+                cout << maze.exitX << " " << maze.exitY;
+                cout << endl;
+            }
+        }
+        maze.grid[y][maze.size] = '\0'; // 确保 C 字符串结尾
     }
 
-    // 输出迷宫布局用于测试
-    std::cout << "n×n固定测试迷宫布局：" << std::endl;
+    // 验证起点和终点是否存在
+    if (maze.startX == -1 || maze.startY == -1 || maze.exitX == -1 || maze.exitY == -1) {
+        std::cerr << "Error: 迷宫中未找到起点 (S) 或终点 (E)！" << std::endl;
+        exit(1);
+    }
+
+    // 输出迷宫（测试用）
+    std::cout << "15×15 fixed test maze layout:" << std::endl;
     for (int i = 0; i < maze.size; ++i) {
         std::cout << maze.grid[i] << std::endl;
     }
 
     return maze;
 }
+
 int main() {
-    Maze maze = generateFixedMaze();
+    std::string mazeFilePath = R"(C:\Users\张喆\Desktop\arithmetic\maze_15_15.json)";
+    Maze maze = generateMazeFromJson(mazeFilePath);
+
     ResourcePathPlanner planner(maze);
     if (planner.solveWithPruning()) {
-
+        // You can add code here to handle the successful path finding
     }
     else {
         std::cout << "无法找到从起点到终点的有效路径" << std::endl;
     }
-    //string mazeFilePath = R"(C:\Users\张喆\Desktop\maze_15_15_2.csv)";
 
-    //MazePathFinder planner(mazeFilePath);
+    // 从JSON文件中读取密码破解数据
+    std::ifstream mazeFile(mazeFilePath);
+    json mazeData;
+    mazeFile >> mazeData;
 
-    //// 计算最优路径（包含动态规划求解和可视化过程）
-    //planner.calculateOptimalPath();
-
-
-    //// 输出结果信息
-    //std::cout << "最大分数: " << planner.getHighestScore() << std::endl;
-    //std::cout << "最短路径长度: " << planner.getShortestDistance() << std::endl;
-
-    // 显示路径详细信息（文本形式）
-   /* planner.displayPath();*/
-
-     // 创建资源拾取策略
-   // ResourcePickingStrategy strategy(generator.getMaze());
-   // 
-   // 
-    //// 示例：设置目标哈希值（实际使用时应从安全存储中获取）
-   //std::string targetHash = "0902e62b2d2d441abab9984e314067c0ce74bd5589f2603d2b47eb40c4498b74";
-
-   // //// 示例线索
-   //std::vector<std::vector<int>> clues = { { 1,1 },{-1,2,-1} };
-
-   // //// 初始资源数量(替换为玩家资源)
-   // 
-
-   // //// 开始回溯猜测密码
-   // guessPassword(clues, resources, targetHash);
+    // 处理密码破解
     std::string directory = "C:\\Users\\张喆\\Desktop\\password测试集\\password_test\\";
     int allguessCount = 0;
-    for (int i = 0; i < 100; ++i)
-    {
-        int resources = 1000;
-        // 生成文件名（包括完整路径）
-        std::string filename = directory + "pwd_";
-        if (i < 10) {
-            filename += "00";
-        }
-        else if (i < 100) {
-            filename += "0";
-        }
-        filename += std::to_string(i);
-        filename += ".json";
-        std::ifstream file(filename);
-        json data;
-        file >> data;
-        std::string targetHash = data["L"];
-        std::vector<std::vector<int>> clues = data["C"];
-        PasswordLock lock;
-        allguessCount += guessPassword(clues, resources, targetHash);
-        std::cout << "第" << i + 1 << "个" << "猜测次数为" << guessPassword(clues, resources, targetHash) << std::endl;
-    }
-    std::cout << "100个文件总猜测次数为" << allguessCount << std::endl;
 
+    // 使用JSON中的C和L数据，而不是从文件读取
+    std::string targetHash = mazeData["L"];
+    std::vector<std::vector<int>> clues = mazeData["C"];
 
-        vector<int> bossHP = { 13, 13, 20 };
-        vector<vector<int>> skills = {
-              // 普通攻击：伤害6，冷却2
-            {9, 5},   // 小技能：伤害2，冷却0
-                       // 中技能：伤害4，冷却1
-            {3,0}
-        };
-        int maxRounds = 100;
+    int resources = 1000;
+    PasswordLock lock;
+    int guessCount = guessPassword(clues, resources, targetHash);
+    allguessCount += guessCount;
+    std::cout << "密码破解猜测次数为: " << guessCount << std::endl;
 
-        vector<int> sequence = findOptimalSkillSequence(bossHP, skills, maxRounds);
-        printSkillSequence(sequence, skills, bossHP);
+    // 处理Boss战
+    std::vector<int> bossHP = mazeData["B"]; // 从JSON中读取Boss血量
+    std::vector<std::vector<int>> skills = mazeData["PlayerSkills"];
+    int maxRounds = 100;
 
-        return 0;
+    std::vector<int> sequence = findOptimalSkillSequence(bossHP, skills, maxRounds);
+    printSkillSequence(sequence, skills, bossHP);
 
-
+    return 0;
 }
-// 运行程序: Ctrl + F5 或调试 >“开始执行(不调试)”菜单
-// 调试程序: F5 或调试 >“开始调试”菜单
-
-// 入门使用技巧: 
-//   1. 使用解决方案资源管理器窗口添加/管理文件
-//   2. 使用团队资源管理器窗口连接到源代码管理
-//   3. 使用输出窗口查看生成输出和其他消息
-//   4. 使用错误列表窗口查看错误
-//   5. 转到“项目”>“添加新项”以创建新的代码文件，或转到“项目”>“添加现有项”以将现有代码文件添加到项目
-//   6. 将来，若要再次打开此项目，请转到“文件”>“打开”>“项目”并选择 .sln 文件

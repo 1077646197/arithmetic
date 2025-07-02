@@ -317,7 +317,7 @@ public:
         }
 
         initialdp(); // 初始化dp表
-        dp[startX][startY] += 100; // 起点初始值加成
+        dp[startX][startY] += 200; // 起点初始值加成
 
         // 第一阶段：剪枝（移除单邻居节点）
         bool updated = true;
@@ -387,6 +387,22 @@ public:
                     }
                 }
             }
+        }
+        // 输出dp2数组（包含0值节点）
+        cout << "dp数组（包含>=0的节点）：" << endl;
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                cout <<setw(4) <<dp[i][j];
+            }
+            cout << endl;
+        }
+        // 输出dp2数组（包含0值节点）
+        cout << "dp2数组（包含>=0的节点）：" << endl;
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                cout<<dp2[i][j];
+            }
+            cout << endl;
         }
         solve();
         // 执行按dp2值遍历（包含0值节点）
