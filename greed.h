@@ -9,7 +9,13 @@
 #include <iomanip>         // 输入输出格式控制
 #include <thread>          // 线程支持
 #include <chrono>          // 时间测量
+#include "puzzle_solving.h"
+#include "boss_bettle.h"
+#include <nlohmann/json.hpp>
 
+using namespace std;
+using json = nlohmann::json;
+std::string mazeFilePath = R"(C:\Users\张喆\Desktop\arithmetic\maze_15_15.json)";
 // ANSI颜色宏定义，用于在支持的终端中显示彩色输出
 #define COLOR_RESET "\033[0m"      // 重置颜色
 #define COLOR_GREEN "\033[32m"    // 路径标记颜色
@@ -126,15 +132,7 @@ public:
             int value = maze->getResourceValue(cell);
             resources += value;
             resourceTaken[x][y] = true;
-
-            string resourceName;
-            if (cell == 'G') resourceName = "金币";
-            else if (cell == 'T') resourceName = "陷阱";
-            else if (cell == 'B') resourceName = "BOSS";
-            else if (cell == 'L') resourceName = "机关";
-
-            cout << "拾取" << resourceName << "在(" << x << ", " << y << ")。";
-            cout << "价值: " << value << "，当前资源: " << resources << endl;
+           
         }
     }
 
@@ -309,23 +307,28 @@ public:
 #else
             system("clear");
 #endif
-
+            char cell2 = mazecopy2->grid[moves[step].first][moves[step].second];
             // 显示当前步骤信息
             cout << "步骤 " << setw(3) << step + 1 << "/" << moves.size()
                 << " | 位置: (" << moves[step].first << ", " << moves[step].second << ")"
-                << " | 分数: " << resources << endl;
+                << endl;
             cout << "------------------------" << endl;
-
+            std::ifstream mazeFile(mazeFilePath);
+            json mazeData;
+            mazeFile >> mazeData;
             // 绘制当前步骤的迷宫状态
             for (int i = 0; i < mazecopy2->rows; i++) {
                 for (int j = 0; j < mazecopy2->cols; j++) {
                     char cell = mazecopy2->grid[i][j];
                     pair<int, int> pos = { i, j };
-
                     // 当前玩家位置
                     if (pos == moves[step]) {
+                        // 从JSON文件中读取密码破解数据
+                        
                         cout << COLOR_GREEN << "&" << COLOR_RESET;
+                       
                         mazecopy2->grid[i][j] = ' ';
+
                     }
                     // 起点位置
                     else if (pos == moves[0]) {
@@ -350,6 +353,8 @@ public:
                     // BOSS
                     else if (cell == 'B') {
                         cout << COLOR_YELLOW << "B" << COLOR_RESET;
+
+
                     }
                     // 机关
                     else if (cell == 'L') {
@@ -379,6 +384,33 @@ public:
 
             // 控制动画速度，延迟300毫秒
             this_thread::sleep_for(chrono::milliseconds(300));
+            if (cell2 == 'L') {
+
+                // 处理密码破解
+                std::string directory = "C:\\Users\\张喆\\Desktop\\password测试集\\password_test\\";
+                // 使用JSON中的C和L数据，而不是从文件读取
+                std::string targetHash = mazeData["L"];
+                std::vector<std::vector<int>> clues = mazeData["C"];
+
+
+                PasswordLock lock;
+                int guessCount = guessPassword(clues, resources, targetHash);
+                std::cout << "密码破解猜测次数为: " << guessCount << std::endl;
+                resources -= guessCount;
+                this_thread::sleep_for(chrono::milliseconds(6000));
+
+            }
+            else if (cell2 == 'B') {
+                // 处理Boss战
+                std::vector<int> bossHP = mazeData["B"]; // 从JSON中读取Boss血量
+                std::vector<std::vector<int>> skills = mazeData["PlayerSkills"];
+                int maxRounds = 100;
+
+                std::vector<int> sequence = findOptimalSkillSequence(bossHP, skills, maxRounds);
+                printSkillSequence(sequence, skills, bossHP);
+                this_thread::sleep_for(chrono::milliseconds(6000));
+
+            }
         }
 
         // 显示最终路径总结

@@ -292,5 +292,5 @@ int  guessPassword(const std::vector<std::vector<int>>& clues, int& resources, c
     if (!found) {
         std::cout << "没有更多可能的密码组合了！" << std::endl;
     }
-    return 1001 - resources;
+    return 1107-resources;
 }

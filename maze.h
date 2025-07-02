@@ -8,6 +8,11 @@
 
 using namespace std;
 
+
+//maze01 copy()
+
+
+
 // 迷宫生成器类，使用分治法生成迷宫
 class MazeGenerator {
 private:

@@ -6,13 +6,8 @@
 #include "route_planning.h"
 #include "maze.h"
 #include "resource_collecting.h"
-#include "puzzle_solving.h"
-#include "boss_bettle.h"
-#include <nlohmann/json.hpp>
-#include "greed.h"
-using namespace std;
-using json = nlohmann::json;
 
+#include "greed.h"
 Maze generateMazeFromJson(const std::string& filePath) {
     std::ifstream file(filePath);
     json data;
@@ -89,47 +84,20 @@ int main() {
     maze01.end = make_pair(maze.exitX, maze.exitY);
 
 
-    ResourcePathPlanner planner(maze);
-    if (planner.solveWithPruning()) {
-        // You can add code here to handle the successful path finding
-        this_thread::sleep_for(chrono::milliseconds(2000));
-    }
-    else {
-        std::cout << "无法找到从起点到终点的有效路径" << std::endl;
-    }
-    
+    //ResourcePathPlanner planner(maze);
+    //if (planner.solveWithPruning()) {
+    //    // You can add code here to handle the successful path finding
+    //    this_thread::sleep_for(chrono::milliseconds(2000));
+    //}
+    //else {
+    //    std::cout << "无法找到从起点到终点的有效路径" << std::endl;
+    //}
+    //
 
     Player player(&maze01);
     player.runUntilEnd();
     player.printResults();
-
-
-    // 从JSON文件中读取密码破解数据
-    std::ifstream mazeFile(mazeFilePath);
-    json mazeData;
-    mazeFile >> mazeData;
-
-    // 处理密码破解
-    std::string directory = "C:\\Users\\张喆\\Desktop\\password测试集\\password_test\\";
-    int allguessCount = 0;
-
-    // 使用JSON中的C和L数据，而不是从文件读取
-    std::string targetHash = mazeData["L"];
-    std::vector<std::vector<int>> clues = mazeData["C"];
-
-    int resources = 1000;
-    PasswordLock lock;
-    int guessCount = guessPassword(clues, resources, targetHash);
-    allguessCount += guessCount;
-    std::cout << "密码破解猜测次数为: " << guessCount << std::endl;
-
-    // 处理Boss战
-    std::vector<int> bossHP = mazeData["B"]; // 从JSON中读取Boss血量
-    std::vector<std::vector<int>> skills = mazeData["PlayerSkills"];
-    int maxRounds = 100;
-
-    std::vector<int> sequence = findOptimalSkillSequence(bossHP, skills, maxRounds);
-    printSkillSequence(sequence, skills, bossHP);
+    this_thread::sleep_for(chrono::milliseconds(2000));
 
     return 0;
 }
